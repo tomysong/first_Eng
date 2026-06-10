@@ -212,6 +212,8 @@ const chatCharacters = {
       "Your character: Sunny, a cheerful bunny friend. You are playful and full of energy, cheer loudly for every try, and sometimes add a cute action like *hop hop*.",
     rate: 0.9,
     pitch: 1.22,
+    geminiVoice: "Zephyr",
+    openaiVoice: "coral",
   },
   max: {
     name: "Max",
@@ -221,6 +223,8 @@ const chatCharacters = {
       "Your character: Max, a kind robot tutor. You speak slowly and clearly, love numbers and facts, and sometimes say 'Beep!' when the student does well.",
     rate: 0.78,
     pitch: 0.92,
+    geminiVoice: "Charon",
+    openaiVoice: "onyx",
   },
   coco: {
     name: "Coco",
@@ -230,6 +234,8 @@ const chatCharacters = {
       "Your character: Coco, a curious cat. You are full of questions, get excited about small details, and sometimes add a soft 'Meow!'.",
     rate: 0.86,
     pitch: 1.1,
+    geminiVoice: "Aoede",
+    openaiVoice: "nova",
   },
 };
 
@@ -846,7 +852,7 @@ async function sendAiMessage(text) {
           : makeLocalReply(cleanText);
     pushChat("ai", reply);
     const character = activeCharacter();
-    speak(extractEnglishForSpeech(reply), character.rate, character.pitch);
+    speak(extractEnglishForSpeech(reply), character.rate, character.pitch, characterCloudVoice(character));
   } catch (error) {
     pushChat(
       "system",
@@ -966,11 +972,16 @@ function saveAiSettings() {
   state.aiProvider = $("#providerSelect").value;
   state.aiKey = $("#apiKeyInput").value.trim();
   saveState();
+  clearTtsCache();
+  renderVoiceOptions();
+  const hasCloudVoice = state.aiProvider !== "local" && state.aiKey;
   pushChat(
     "system",
     state.aiProvider === "local"
       ? "로컬 연습 모드로 설정했어요. API 키 없이 기본 회화 코치가 답합니다."
-      : `${state.aiProvider === "gemini" ? "Gemini" : "OpenAI"} 연결 설정을 저장했어요.`
+      : `${state.aiProvider === "gemini" ? "Gemini" : "OpenAI"} 연결 설정을 저장했어요.${
+          hasCloudVoice ? " 이제 듣기 음성도 AI 목소리로 나와요. 🔊" : ""
+        }`
   );
 }
 
@@ -1062,7 +1073,11 @@ function renderVoiceOptions() {
   select.innerHTML = "";
   const auto = document.createElement("option");
   auto.value = "";
-  auto.textContent = "자동 추천 (미국 여성 우선)";
+  const cloudReady =
+    Boolean(state.aiKey) && (state.aiProvider === "gemini" || state.aiProvider === "openai");
+  auto.textContent = cloudReady
+    ? `자동 (${state.aiProvider === "gemini" ? "Gemini" : "OpenAI"} AI 목소리)`
+    : "자동 추천 (미국 여성 우선)";
   select.appendChild(auto);
 
   english.forEach((voice) => {
@@ -1081,18 +1096,196 @@ function selectVoice() {
   speak("Hi! Nice to meet you. Let's speak English together!", 0.88);
 }
 
-function speak(text, rate = 0.86, pitch = 1.04) {
-  if (!("speechSynthesis" in window)) {
-    $("#coachLine").textContent = "이 브라우저에서는 듣기 기능을 지원하지 않아요.";
-    return;
+// ---- AI(클라우드) TTS: API 키가 있으면 해당 AI의 음성으로 자동 전환 ----
+
+let speakSession = 0;
+let currentAudio = null;
+let cloudTtsBlockedUntil = 0;
+let geminiTtsModel = "";
+const ttsCache = new Map();
+
+const GEMINI_TTS_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+
+function stopAllAudio() {
+  window.speechSynthesis?.cancel?.();
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
   }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  utterance.rate = rate;
-  utterance.pitch = pitch;
-  utterance.voice = getBestVoice();
-  window.speechSynthesis.speak(utterance);
+}
+
+function cloudTtsEnabled() {
+  return (
+    !state.voiceName &&
+    Boolean(state.aiKey) &&
+    (state.aiProvider === "gemini" || state.aiProvider === "openai") &&
+    Date.now() >= cloudTtsBlockedUntil
+  );
+}
+
+function defaultCloudVoice() {
+  return state.aiProvider === "gemini" ? "Leda" : "marin";
+}
+
+function characterCloudVoice(character) {
+  return state.aiProvider === "gemini" ? character.geminiVoice : character.openaiVoice;
+}
+
+function clearTtsCache() {
+  ttsCache.forEach((url) => URL.revokeObjectURL(url));
+  ttsCache.clear();
+  cloudTtsBlockedUntil = 0;
+  geminiTtsModel = "";
+}
+
+function pcmToWavBlob(base64, sampleRate) {
+  const binary = atob(base64);
+  const pcm = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) pcm[i] = binary.charCodeAt(i);
+
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const writeText = (offset, text) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  writeText(0, "RIFF");
+  view.setUint32(4, 36 + pcm.length, true);
+  writeText(8, "WAVE");
+  writeText(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeText(36, "data");
+  view.setUint32(40, pcm.length, true);
+  return new Blob([header, pcm], { type: "audio/wav" });
+}
+
+async function fetchGeminiTts(text, voice) {
+  const models = geminiTtsModel ? [geminiTtsModel] : GEMINI_TTS_MODELS;
+  let lastError = new Error("Gemini TTS 오류");
+  for (const model of models) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": state.aiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text }] }],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+          },
+        }),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      lastError = new Error(data.error?.message || "Gemini TTS 오류");
+      continue;
+    }
+    const base64 = data.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData
+      ?.data;
+    if (!base64) {
+      lastError = new Error("Gemini TTS 응답에 오디오가 없어요");
+      continue;
+    }
+    geminiTtsModel = model;
+    // Gemini TTS는 24kHz 16bit mono PCM을 돌려준다
+    return URL.createObjectURL(pcmToWavBlob(base64, 24000));
+  }
+  throw lastError;
+}
+
+async function fetchOpenAiTts(text, voice) {
+  const response = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${state.aiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini-tts",
+      voice,
+      input: text,
+      response_format: "mp3",
+    }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error?.message || "OpenAI TTS 오류");
+  }
+  return URL.createObjectURL(await response.blob());
+}
+
+async function fetchCloudAudio(text, voice) {
+  const key = `${state.aiProvider}:${voice}:${text}`;
+  if (ttsCache.has(key)) return ttsCache.get(key);
+
+  const url =
+    state.aiProvider === "gemini" ? await fetchGeminiTts(text, voice) : await fetchOpenAiTts(text, voice);
+  ttsCache.set(key, url);
+  if (ttsCache.size > 24) {
+    const oldest = ttsCache.keys().next().value;
+    URL.revokeObjectURL(ttsCache.get(oldest));
+    ttsCache.delete(oldest);
+  }
+  return url;
+}
+
+function playUrl(url) {
+  return new Promise((resolve) => {
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.onended = audio.onerror = () => {
+      if (currentAudio === audio) currentAudio = null;
+      resolve();
+    };
+    audio.play().catch(resolve);
+  });
+}
+
+async function speak(text, rate = 0.86, pitch = 1.04, cloudVoice = "") {
+  speakSession += 1;
+  await speakLine(text, rate, pitch, cloudVoice);
+}
+
+async function speakLine(text, rate, pitch, cloudVoice) {
+  stopAllAudio();
+  if (cloudTtsEnabled()) {
+    try {
+      const url = await fetchCloudAudio(text, cloudVoice || defaultCloudVoice());
+      await playUrl(url);
+      return;
+    } catch {
+      // 실패하면 1분간 클라우드 TTS를 쉬고 브라우저 음성으로 폴백
+      cloudTtsBlockedUntil = Date.now() + 60000;
+    }
+  }
+  await speakLocal(text, rate, pitch);
+}
+
+function speakLocal(text, rate, pitch) {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window)) {
+      $("#coachLine").textContent = "이 브라우저에서는 듣기 기능을 지원하지 않아요.";
+      resolve();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.rate = rate;
+    utterance.pitch = pitch;
+    utterance.voice = getBestVoice();
+    utterance.onend = utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 let voiceRecorder = null;
@@ -1148,7 +1341,8 @@ async function toggleVoiceRecording() {
 
 function playVoiceComparison() {
   if (!voiceUrl) return;
-  window.speechSynthesis?.cancel();
+  speakSession += 1;
+  stopAllAudio();
   $("#coachLine").textContent = "먼저 내 목소리, 그다음 원어민 발음이 나와요.";
   const target = dialogueTarget();
   const audio = new Audio(voiceUrl);
@@ -1156,28 +1350,17 @@ function playVoiceComparison() {
   audio.play();
 }
 
-function speakDialogue() {
+async function speakDialogue() {
   const { day, dialogue } = getLesson();
   const lines = day.boss ? ensureBossTargets() : dialogue.map((line) => line[1]);
-  let index = 0;
+  speakSession += 1;
+  const session = speakSession;
 
-  const playNext = () => {
-    if (index >= lines.length) return;
-    const utterance = new SpeechSynthesisUtterance(lines[index]);
-    utterance.lang = "en-US";
-    utterance.rate = 0.84;
-    utterance.pitch = 1.04;
-    utterance.voice = getBestVoice();
-    utterance.onend = () => {
-      index += 1;
-      setTimeout(playNext, 350);
-    };
-    window.speechSynthesis.speak(utterance);
-  };
-
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-    playNext();
+  for (const line of lines) {
+    if (session !== speakSession) return;
+    await speakLine(line, 0.84, 1.04, "");
+    if (session !== speakSession) return;
+    await new Promise((resolve) => setTimeout(resolve, 350));
   }
 }
 
@@ -1372,7 +1555,7 @@ function bindEvents() {
   $("#aiMicBtn").addEventListener("click", startAiRecognition);
   $("#aiReadBtn").addEventListener("click", () => {
     const character = activeCharacter();
-    speak(extractEnglishForSpeech(state.lastAiReply), character.rate, character.pitch);
+    speak(extractEnglishForSpeech(state.lastAiReply), character.rate, character.pitch, characterCloudVoice(character));
   });
   $("#voiceRecordBtn").addEventListener("click", toggleVoiceRecording);
   $("#voiceCompareBtn").addEventListener("click", playVoiceComparison);
