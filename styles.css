@@ -524,6 +524,15 @@ h3 {
   cursor: default;
 }
 
+.voice-pick {
+  display: block;
+  margin-top: 10px;
+}
+
+.voice-pick select {
+  margin-top: 4px;
+}
+
 .coach-box {
   margin-top: 14px;
   padding: 14px;

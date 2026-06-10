@@ -334,6 +334,7 @@ const state = {
   aiProvider: localStorage.getItem("kidEnglish.aiProvider") || "gemini",
   aiKey: localStorage.getItem("kidEnglish.aiKey") || "",
   chatCharacter: localStorage.getItem("kidEnglish.chatCharacter") || "sunny",
+  voiceName: localStorage.getItem("kidEnglish.voiceName") || "",
   chatMessages: JSON.parse(localStorage.getItem("kidEnglish.chatMessages") || "[]"),
   lastAiReply: localStorage.getItem("kidEnglish.lastAiReply") || "",
   weakPhrases: JSON.parse(localStorage.getItem("kidEnglish.weakPhrases") || "[]"),
@@ -357,6 +358,7 @@ function saveState() {
   localStorage.setItem("kidEnglish.aiProvider", state.aiProvider);
   localStorage.setItem("kidEnglish.aiKey", state.aiKey);
   localStorage.setItem("kidEnglish.chatCharacter", state.chatCharacter);
+  localStorage.setItem("kidEnglish.voiceName", state.voiceName);
   localStorage.setItem("kidEnglish.chatMessages", JSON.stringify(state.chatMessages.slice(-16)));
   localStorage.setItem("kidEnglish.lastAiReply", state.lastAiReply);
   localStorage.setItem("kidEnglish.weakPhrases", JSON.stringify(state.weakPhrases.slice(0, 12)));
@@ -1000,13 +1002,83 @@ function startAiRecognition() {
 
 function getBestVoice() {
   const voices = window.speechSynthesis?.getVoices?.() || [];
+  const english = voices.filter((voice) => /^en/i.test(voice.lang));
+
+  // 사용자가 직접 고른 목소리가 있으면 최우선
+  if (state.voiceName) {
+    const saved = english.find((voice) => voice.name === state.voiceName);
+    if (saved) return saved;
+  }
+
+  // 미국 여성/밝은 음성 우선. 같은 이름이면 Enhanced/Premium/Natural 변형 우선
+  const preferredNames = [
+    "Ava",
+    "Samantha",
+    "Allison",
+    "Susan",
+    "Joelle",
+    "Google US English",
+    "Aria",
+    "Jenny",
+    "Michelle",
+    "Zoe",
+    "Serena",
+  ];
+  for (const name of preferredNames) {
+    const matches = english.filter((voice) => voice.name.includes(name));
+    if (matches.length) {
+      return matches.find((voice) => /enhanced|premium|natural/i.test(voice.name)) || matches[0];
+    }
+  }
+
   return (
-    voices.find((voice) => /Samantha|Ava|Allison|Daniel|Serena|Karen/i.test(voice.name) && /^en/i.test(voice.lang)) ||
-    voices.find((voice) => /^en-US/i.test(voice.lang)) ||
-    voices.find((voice) => /^en-GB/i.test(voice.lang)) ||
-    voices.find((voice) => /^en/i.test(voice.lang)) ||
+    english.find((voice) => /^en-US/i.test(voice.lang)) ||
+    english[0] ||
     null
   );
+}
+
+// macOS의 효과음/장난 음성은 학습용 목록에서 제외
+const NOVELTY_VOICES =
+  /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox/i;
+
+function listLearningVoices() {
+  return (window.speechSynthesis?.getVoices?.() || [])
+    .filter((voice) => /^en/i.test(voice.lang) && !NOVELTY_VOICES.test(voice.name))
+    .sort((a, b) => {
+      const rank = (voice) =>
+        (/Ava|Samantha|Allison|Susan|Joelle|Google US English|Aria|Jenny|Michelle|Zoe|Serena/i.test(voice.name)
+          ? 0
+          : 2) + (/^en-US/i.test(voice.lang) ? 0 : 1);
+      return rank(a) - rank(b) || a.name.localeCompare(b.name);
+    });
+}
+
+function renderVoiceOptions() {
+  const select = $("#voiceSelect");
+  if (!select) return;
+  const english = listLearningVoices();
+
+  select.innerHTML = "";
+  const auto = document.createElement("option");
+  auto.value = "";
+  auto.textContent = "자동 추천 (미국 여성 우선)";
+  select.appendChild(auto);
+
+  english.forEach((voice) => {
+    const option = document.createElement("option");
+    option.value = voice.name;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    select.appendChild(option);
+  });
+
+  select.value = english.some((voice) => voice.name === state.voiceName) ? state.voiceName : "";
+}
+
+function selectVoice() {
+  state.voiceName = $("#voiceSelect").value;
+  saveState();
+  speak("Hi! Nice to meet you. Let's speak English together!", 0.88);
 }
 
 function speak(text, rate = 0.86, pitch = 1.04) {
@@ -1304,6 +1376,7 @@ function bindEvents() {
   });
   $("#voiceRecordBtn").addEventListener("click", toggleVoiceRecording);
   $("#voiceCompareBtn").addEventListener("click", playVoiceComparison);
+  $("#voiceSelect").addEventListener("change", selectVoice);
   $("#chatForm").addEventListener("submit", (event) => {
     event.preventDefault();
     sendAiMessage($("#chatInput").value);
@@ -1324,8 +1397,9 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
 
-window.speechSynthesis?.addEventListener?.("voiceschanged", getBestVoice);
+window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
 bindEvents();
+renderVoiceOptions();
 updateStatus();
 renderToday();
 renderPlan();
