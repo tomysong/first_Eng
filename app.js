@@ -332,6 +332,7 @@ const state = {
   viewDay: 1,
   streak: Number(localStorage.getItem("kidEnglish.streak") || 0),
   lastCompletedDate: localStorage.getItem("kidEnglish.lastCompletedDate") || "",
+  lastCompletedDay: Number(localStorage.getItem("kidEnglish.lastCompletedDay") || 0),
   versionComplete: localStorage.getItem("kidEnglish.versionComplete") === "true",
   updateRequested: localStorage.getItem("kidEnglish.updateRequested") === "true",
   quizIndex: 0,
@@ -359,6 +360,7 @@ function saveState() {
   localStorage.setItem("kidEnglish.day", String(state.progressDay));
   localStorage.setItem("kidEnglish.streak", String(state.streak));
   localStorage.setItem("kidEnglish.lastCompletedDate", state.lastCompletedDate);
+  localStorage.setItem("kidEnglish.lastCompletedDay", String(state.lastCompletedDay));
   localStorage.setItem("kidEnglish.versionComplete", String(state.versionComplete));
   localStorage.setItem("kidEnglish.updateRequested", String(state.updateRequested));
   localStorage.setItem("kidEnglish.aiProvider", state.aiProvider);
@@ -377,6 +379,20 @@ function dateStamp(offsetDays = 0) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function applyHybridProgress() {
+  const completedOnPreviousDate = state.lastCompletedDate && state.lastCompletedDate !== dateStamp();
+  const currentDayWasCompleted = state.lastCompletedDay === state.progressDay;
+  if (!state.versionComplete && completedOnPreviousDate && currentDayWasCompleted) {
+    if (state.progressDay < APP_VERSION.days) {
+      state.progressDay += 1;
+    } else {
+      state.versionComplete = true;
+    }
+    state.viewDay = state.progressDay;
+    saveState();
+  }
 }
 
 function activeLevel() {
@@ -511,6 +527,8 @@ function finishTest() {
   state.level = level;
   state.progressDay = 1;
   state.viewDay = 1;
+  state.lastCompletedDate = "";
+  state.lastCompletedDay = 0;
   state.weakPhrases = [];
   state.bossCleared = [];
   state.bossKey = "";
@@ -650,7 +668,10 @@ function renderPlan() {
     plan
       .filter((day) => day.week === week)
       .forEach((day) => {
-        const done = state.versionComplete || day.day < state.progressDay;
+        const done =
+          state.versionComplete ||
+          day.day < state.progressDay ||
+          (state.lastCompletedDate && day.day === state.lastCompletedDay);
         const row = document.createElement("button");
         row.className = `day-row ${day.day === state.viewDay ? "active-day" : ""} ${done ? "done-day" : ""}`;
         row.type = "button";
@@ -1478,6 +1499,7 @@ function resetApp() {
   localStorage.removeItem("kidEnglish.day");
   localStorage.removeItem("kidEnglish.streak");
   localStorage.removeItem("kidEnglish.lastCompletedDate");
+  localStorage.removeItem("kidEnglish.lastCompletedDay");
   localStorage.removeItem("kidEnglish.versionComplete");
   localStorage.removeItem("kidEnglish.updateRequested");
   localStorage.removeItem("kidEnglish.chatMessages");
@@ -1490,6 +1512,7 @@ function resetApp() {
   state.viewDay = 1;
   state.streak = 0;
   state.lastCompletedDate = "";
+  state.lastCompletedDay = 0;
   state.weakPhrases = [];
   state.bossCleared = [];
   state.bossKey = "";
@@ -1521,10 +1544,9 @@ function completeToday() {
   // 어제 완료했으면 연속 +1, 하루라도 건너뛰었으면 1부터 다시
   state.streak = state.lastCompletedDate === dateStamp(-1) ? state.streak + 1 : 1;
   state.lastCompletedDate = today;
+  state.lastCompletedDay = state.progressDay;
 
-  if (state.progressDay < APP_VERSION.days) {
-    state.progressDay += 1;
-  } else {
+  if (state.progressDay >= APP_VERSION.days) {
     state.versionComplete = true;
   }
   state.viewDay = state.progressDay;
@@ -1532,6 +1554,9 @@ function completeToday() {
   updateStatus();
   renderToday();
   renderPlan();
+  $("#coachLine").textContent = state.versionComplete
+    ? `${APP_VERSION.id} 28일을 완료했어요. v1 복습 후 ${APP_VERSION.next} 업데이트를 요청할 수 있어요.`
+    : `Day ${state.progressDay} 완료! 내일 앱을 열면 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
 }
 
 function bindEvents() {
@@ -1581,6 +1606,7 @@ if ("serviceWorker" in navigator) {
 }
 
 window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
+applyHybridProgress();
 bindEvents();
 renderVoiceOptions();
 updateStatus();
