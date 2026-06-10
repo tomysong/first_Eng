@@ -335,7 +335,12 @@ const state = {
   aiKey: localStorage.getItem("kidEnglish.aiKey") || "",
   chatCharacter: localStorage.getItem("kidEnglish.chatCharacter") || "sunny",
   chatMessages: JSON.parse(localStorage.getItem("kidEnglish.chatMessages") || "[]"),
-  lastAiReply: "",
+  lastAiReply: localStorage.getItem("kidEnglish.lastAiReply") || "",
+  weakPhrases: JSON.parse(localStorage.getItem("kidEnglish.weakPhrases") || "[]"),
+  bossCleared: JSON.parse(localStorage.getItem("kidEnglish.bossCleared") || "[]"),
+  bossKey: "",
+  bossTargets: [],
+  bossPassed: [],
 };
 state.viewDay = state.progressDay;
 
@@ -353,6 +358,9 @@ function saveState() {
   localStorage.setItem("kidEnglish.aiKey", state.aiKey);
   localStorage.setItem("kidEnglish.chatCharacter", state.chatCharacter);
   localStorage.setItem("kidEnglish.chatMessages", JSON.stringify(state.chatMessages.slice(-16)));
+  localStorage.setItem("kidEnglish.lastAiReply", state.lastAiReply);
+  localStorage.setItem("kidEnglish.weakPhrases", JSON.stringify(state.weakPhrases.slice(0, 12)));
+  localStorage.setItem("kidEnglish.bossCleared", JSON.stringify(state.bossCleared));
 }
 
 function dateStamp(offsetDays = 0) {
@@ -370,16 +378,42 @@ function activeLevel() {
 function buildCurriculum(levelKey) {
   const seeds = curriculumSeeds[levelKey];
   return Array.from({ length: 28 }, (_, index) => {
-    const seed = seeds[index % seeds.length];
+    const dayNum = index + 1;
     const week = Math.floor(index / 7) + 1;
+    if (dayNum % 7 === 0) {
+      return {
+        day: dayNum,
+        week,
+        title: `Week ${week} 보스 미션`,
+        goal: "이번 주 문장 3개를 말하기로 통과하기",
+        phrase: "Speak and clear!",
+        boss: true,
+      };
+    }
+    const seed = seeds[index % seeds.length];
     return {
-      day: index + 1,
+      day: dayNum,
       week,
       title: seed[0],
       goal: seed[1],
       phrase: seed[2],
     };
   });
+}
+
+function ensureBossTargets() {
+  const { levelKey, day } = getLesson();
+  if (!day.boss) return [];
+  const key = `${levelKey}:${day.day}`;
+  if (state.bossKey !== key) {
+    const pool = buildCurriculum(levelKey)
+      .filter((item) => item.week === day.week && !item.boss)
+      .map((item) => item.phrase);
+    state.bossKey = key;
+    state.bossTargets = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
+    state.bossPassed = [];
+  }
+  return state.bossTargets;
 }
 
 function updateStatus() {
@@ -469,6 +503,11 @@ function finishTest() {
   state.level = level;
   state.progressDay = 1;
   state.viewDay = 1;
+  state.weakPhrases = [];
+  state.bossCleared = [];
+  state.bossKey = "";
+  state.bossTargets = [];
+  state.bossPassed = [];
   state.versionComplete = false;
   state.updateRequested = false;
   saveState();
@@ -500,40 +539,87 @@ function renderToday() {
   $("#coachLine").textContent = state.level
     ? `${LEVELS[levelKey].coach} 오늘 핵심 표현은 "${day.phrase}" 입니다.`
     : "테스트를 먼저 하면 더 잘 맞는 미션을 추천할 수 있어요.";
+  if (day.boss) {
+    const targets = ensureBossTargets();
+    const passedCount = state.bossCleared.includes(day.day) ? targets.length : state.bossPassed.length;
+    $("#coachLine").textContent =
+      passedCount >= targets.length
+        ? `Week ${day.week} 보스 미션 통과! 👑 다른 날 문장도 복습해보세요.`
+        : `보스 미션 ${passedCount}/${targets.length}: 아래 문장을 "말하기" 버튼으로 통과하세요.`;
+  }
   if (state.versionComplete) {
     $("#coachLine").textContent = `${APP_VERSION.id}를 마쳤어요. 커리큘럼 탭에서 복습 후 ${APP_VERSION.next} 업데이트 요청을 확인하세요.`;
   }
   $("#speechResult").textContent = "";
-  $("#dialogueList").innerHTML = "";
 
-  dialogue.forEach((line, index) => {
-    const row = document.createElement("div");
-    row.className = "line-card";
-    row.innerHTML = `
-      <span class="speaker">${line[0]}</span>
-      <div>
-        <p class="english-line">${line[1]}</p>
-        <span class="korean-line">${line[2]}</span>
-      </div>
-      <button class="icon-btn speak-small" type="button" title="문장 듣기">▶</button>
-    `;
-    row.querySelector("button").addEventListener("click", () => speak(line[1]));
-    row.addEventListener("click", (event) => {
-      if (event.target.tagName !== "BUTTON") {
-        state.sentenceIndex = index;
-        speak(line[1]);
-      }
+  if (day.boss) {
+    renderBossMission();
+  } else {
+    $("#dialogueList").innerHTML = "";
+    dialogue.forEach((line, index) => {
+      const row = document.createElement("div");
+      row.className = "line-card";
+      row.innerHTML = `
+        <span class="speaker">${line[0]}</span>
+        <div>
+          <p class="english-line">${line[1]}</p>
+          <span class="korean-line">${line[2]}</span>
+        </div>
+        <button class="icon-btn speak-small" type="button" title="문장 듣기">▶</button>
+      `;
+      row.querySelector("button").addEventListener("click", () => speak(line[1]));
+      row.addEventListener("click", (event) => {
+        if (event.target.tagName !== "BUTTON") {
+          state.sentenceIndex = index;
+          speak(line[1]);
+        }
+      });
+      $("#dialogueList").appendChild(row);
     });
-    $("#dialogueList").appendChild(row);
-  });
+  }
 
   renderPhraseCards();
   updateStatus();
 }
 
+function renderBossMission() {
+  const { day } = getLesson();
+  const targets = ensureBossTargets();
+  const cleared = state.bossCleared.includes(day.day);
+  const list = $("#dialogueList");
+  list.innerHTML = "";
+
+  targets.forEach((phrase, index) => {
+    const passed = cleared || state.bossPassed.includes(index);
+    const row = document.createElement("div");
+    row.className = `line-card boss-line ${passed ? "passed" : ""}`;
+    row.innerHTML = `
+      <span class="speaker">${passed ? "✅" : `미션 ${index + 1}`}</span>
+      <div>
+        <p class="english-line">${phrase}</p>
+        <span class="korean-line">${passed ? "통과!" : "듣고 따라 말해보세요"}</span>
+      </div>
+      <button class="icon-btn speak-small" type="button" title="문장 듣기">▶</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => speak(phrase));
+    list.appendChild(row);
+  });
+}
+
 function renderPhraseCards() {
   const phrases = [...phraseBank[activeLevel()]].sort(() => Math.random() - 0.5);
   $("#phraseCards").innerHTML = "";
+
+  state.weakPhrases.slice(0, 4).forEach((item) => {
+    const card = document.createElement("button");
+    card.className = "phrase-card weak";
+    card.type = "button";
+    card.innerHTML = `<strong></strong><span>🔁 복습 카드 · 잘 말하면 사라져요</span>`;
+    card.querySelector("strong").textContent = item.en;
+    card.addEventListener("click", () => speak(item.en));
+    $("#phraseCards").appendChild(card);
+  });
+
   phrases.forEach(([en, ko]) => {
     const card = document.createElement("button");
     card.className = "phrase-card";
@@ -560,9 +646,11 @@ function renderPlan() {
         const row = document.createElement("button");
         row.className = `day-row ${day.day === state.viewDay ? "active-day" : ""} ${done ? "done-day" : ""}`;
         row.type = "button";
+        const bossMark = day.boss ? "👑 " : "";
+        const clearMark = day.boss && state.bossCleared.includes(day.day) ? " ⭐" : "";
         row.innerHTML = `
           <span class="day-num">D${day.day}</span>
-          <span><strong>${day.title}</strong><span>${day.goal} · ${day.phrase}</span></span>
+          <span><strong>${bossMark}${day.title}${clearMark}</strong><span>${day.goal} · ${day.phrase}</span></span>
         `;
         row.addEventListener("click", () => {
           state.viewDay = day.day;
@@ -625,6 +713,8 @@ function buildUpdatePayload() {
     streak: state.streak,
     requestedAt: new Date().toISOString(),
     reviewBeforeUnlock: true,
+    weakPhrases: state.weakPhrases.map((item) => item.en),
+    bossCleared: [...state.bossCleared],
     storagePlan: "POST /api/version-requests -> server stores progress, weak phrases, next curriculum unlock state",
   };
 }
@@ -780,7 +870,9 @@ async function callGemini(text) {
         contents: buildGeminiHistory(text),
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 120,
+          // thinking 토큰이 출력 한도에 합산되어 빈 응답이 오는 것을 방지
+          maxOutputTokens: 400,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     }
@@ -937,7 +1029,12 @@ let voiceUrl = "";
 let voiceStopTimer = 0;
 
 function dialogueTarget() {
-  const { dialogue } = getLesson();
+  const { day, dialogue } = getLesson();
+  if (day.boss) {
+    const targets = ensureBossTargets();
+    const next = targets.find((_, index) => !state.bossPassed.includes(index));
+    return next || targets[0];
+  }
   return dialogue.find((line) => line[0] === "You")?.[1] || dialogue[0][1];
 }
 
@@ -988,12 +1085,13 @@ function playVoiceComparison() {
 }
 
 function speakDialogue() {
-  const { dialogue } = getLesson();
+  const { day, dialogue } = getLesson();
+  const lines = day.boss ? ensureBossTargets() : dialogue.map((line) => line[1]);
   let index = 0;
 
   const playNext = () => {
-    if (index >= dialogue.length) return;
-    const utterance = new SpeechSynthesisUtterance(dialogue[index][1]);
+    if (index >= lines.length) return;
+    const utterance = new SpeechSynthesisUtterance(lines[index]);
     utterance.lang = "en-US";
     utterance.rate = 0.84;
     utterance.pitch = 1.04;
@@ -1012,16 +1110,16 @@ function speakDialogue() {
 }
 
 function speakNextSentence() {
-  const { dialogue } = getLesson();
-  const line = dialogue[state.sentenceIndex % dialogue.length][1];
+  const { day, dialogue } = getLesson();
+  const lines = day.boss ? ensureBossTargets() : dialogue.map((line) => line[1]);
+  const line = lines[state.sentenceIndex % lines.length];
   state.sentenceIndex += 1;
   speak(line, 0.78);
 }
 
 function startRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const { dialogue } = getLesson();
-  const target = dialogue.find((line) => line[0] === "You")?.[1] || dialogue[0][1];
+  const target = dialogueTarget();
 
   if (!SpeechRecognition) {
     $("#coachLine").textContent = `마이크 인식은 이 브라우저에서 제한될 수 있어요. 대신 "${target}"를 크게 따라 말해보세요.`;
@@ -1039,11 +1137,18 @@ function startRecognition() {
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     const score = compareSpeech(target, transcript);
-    $("#speechResult").textContent = `들은 문장: ${transcript}`;
+    renderWordFeedback(target, transcript);
+    recordSpeechScore(target, score);
+
+    const { day } = getLesson();
+    if (day.boss) {
+      handleBossAttempt(target, score, day);
+      return;
+    }
     $("#coachLine").textContent =
       score > 0.7
         ? "좋아요. 핵심 단어가 잘 들렸어요."
-        : "괜찮아요. 천천히 한 번 더, 끝소리를 살려볼게요.";
+        : "괜찮아요. 회색 단어를 살려서 한 번 더! 이 문장은 표현 카드에 복습으로 담아둘게요.";
   };
 
   recognition.onerror = () => {
@@ -1051,17 +1156,66 @@ function startRecognition() {
   };
 }
 
+function handleBossAttempt(target, score, day) {
+  if (score < 0.6) {
+    $("#coachLine").textContent = "아쉬워요! 초록 단어는 잘 들렸어요. 한 번 더 도전!";
+    return;
+  }
+  const index = state.bossTargets.indexOf(target);
+  if (index >= 0 && !state.bossPassed.includes(index)) state.bossPassed.push(index);
+
+  if (state.bossPassed.length >= state.bossTargets.length && !state.bossCleared.includes(day.day)) {
+    state.bossCleared.push(day.day);
+    saveState();
+  }
+  renderBossMission();
+  $("#coachLine").textContent = state.bossCleared.includes(day.day)
+    ? `Week ${day.week} 보스 클리어! 👑 정말 멋져요!`
+    : `통과! 🎉 (${state.bossPassed.length}/${state.bossTargets.length}) 다음 문장에 도전하세요.`;
+}
+
+function cleanWords(value) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 function compareSpeech(target, transcript) {
-  const clean = (value) =>
-    value
-      .toLowerCase()
-      .replace(/[^a-z\s]/g, "")
-      .split(/\s+/)
-      .filter(Boolean);
-  const targetWords = clean(target);
-  const heardWords = new Set(clean(transcript));
+  const targetWords = cleanWords(target);
+  const heardWords = new Set(cleanWords(transcript));
   const matches = targetWords.filter((word) => heardWords.has(word)).length;
   return matches / Math.max(1, targetWords.length);
+}
+
+function renderWordFeedback(target, transcript) {
+  const heardWords = new Set(cleanWords(transcript));
+  const colored = target
+    .split(/\s+/)
+    .map((word) => {
+      const key = cleanWords(word)[0] || "";
+      const hit = key && heardWords.has(key);
+      return `<span class="${hit ? "word-hit" : "word-miss"}">${word}</span>`;
+    })
+    .join(" ");
+  const heardLine = document.createElement("span");
+  heardLine.textContent = `들은 문장: ${transcript}`;
+  $("#speechResult").innerHTML = `${heardLine.outerHTML}<br>${colored}`;
+}
+
+function recordSpeechScore(target, score) {
+  const index = state.weakPhrases.findIndex((item) => item.en === target);
+  if (score < 0.7) {
+    if (index >= 0) state.weakPhrases[index].tries += 1;
+    else state.weakPhrases.unshift({ en: target, tries: 1 });
+    state.weakPhrases = state.weakPhrases.slice(0, 12);
+  } else if (index >= 0) {
+    // 잘 말했으면 복습 카드에서 졸업
+    state.weakPhrases.splice(index, 1);
+  }
+  saveState();
+  renderPhraseCards();
 }
 
 function resetApp() {
@@ -1073,11 +1227,19 @@ function resetApp() {
   localStorage.removeItem("kidEnglish.updateRequested");
   localStorage.removeItem("kidEnglish.chatMessages");
   localStorage.removeItem("kidEnglish.pendingUpdateRequest");
+  localStorage.removeItem("kidEnglish.lastAiReply");
+  localStorage.removeItem("kidEnglish.weakPhrases");
+  localStorage.removeItem("kidEnglish.bossCleared");
   state.level = "";
   state.progressDay = 1;
   state.viewDay = 1;
   state.streak = 0;
   state.lastCompletedDate = "";
+  state.weakPhrases = [];
+  state.bossCleared = [];
+  state.bossKey = "";
+  state.bossTargets = [];
+  state.bossPassed = [];
   state.versionComplete = false;
   state.updateRequested = false;
   state.quizIndex = 0;

@@ -475,6 +475,25 @@ h3 {
   font-size: 0.85rem;
 }
 
+.line-card.boss-line {
+  background: #fffaf0;
+  border-color: #f2c997;
+}
+
+.line-card.boss-line.passed {
+  background: #e6f8ee;
+  border-color: #8ed7b0;
+}
+
+.word-hit {
+  color: #1e8e5a;
+  font-weight: 850;
+}
+
+.word-miss {
+  color: #9aa7b0;
+}
+
 .speak-small {
   width: 38px;
   height: 38px;
@@ -540,6 +559,11 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: linear-gradient(145deg, #fff, #fff9ee);
+}
+
+.phrase-card.weak {
+  background: linear-gradient(145deg, #fff, #ffefe9);
+  border-color: #f5b2a3;
 }
 
 .phrase-card strong {
