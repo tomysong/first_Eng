@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# 로컬 도구 설정
+.claude/
+.code-review-graph/
+
+# 환경 변수 (서버 도입 대비)
+.env
+.env.*
+!.env.example

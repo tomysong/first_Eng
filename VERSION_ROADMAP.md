@@ -1,0 +1,119 @@
+# AI초딩영어 버전 로드맵
+
+## 제품 운영 원칙
+
+- `v1`은 28일 완결판으로 고정한다.
+- 한 버전은 `28일 학습 + 버전 복습 + 다음 버전 업데이트 요청`으로 닫는다.
+- 다음 버전은 바로 열지 않고, 이전 버전에서 배운 표현을 복습한 뒤 시작한다.
+- 최대 1년치는 앱 안에 압축 로드맵으로 보여주고, 실제 상세 커리큘럼은 버전 업데이트 때 서버에서 내려받는다.
+
+## 1년 압축 커리큘럼
+
+| 버전 | 기간 | 주제 | 목표 |
+| --- | --- | --- | --- |
+| v1 | Month 1 | 말문 열기 | 인사, 감정, 좋아하는 것, 학교 물건 |
+| v2 | Month 2 | My World | 가족, 친구, 학교생활, 취미 소개 |
+| v3 | Month 3 | Daily Conversation | 카페, 가게, 교실, 도움 요청 역할극 |
+| v4 | Month 4 | Story Speaking | 어제 한 일, 주말 이야기, 순서 말하기 |
+| v5 | Month 5 | Opinion English | I think, because, agree, better than |
+| v6 | Month 6 | Mission English | 영어로 초대, 주문, 계획, 문제 해결 |
+| v7 | Month 7 | Travel Starter | 공항, 호텔, 길 묻기, 여행 물건 |
+| v8 | Month 8 | School Project | 발표, 그림 설명, 간단한 조사 결과 |
+| v9 | Month 9 | Story Maker | 캐릭터, 문제, 해결, 결말 만들기 |
+| v10 | Month 10 | Culture Talk | 음식, 명절, 놀이, 나라 비교 |
+| v11 | Month 11 | Confidence Chat | 3분 자유대화, 되묻기, 고쳐 말하기 |
+| v12 | Month 12 | My English Show | 1년 포트폴리오, 최종 인터뷰, 발표 녹음 |
+
+## v1 종료 후 사용자 흐름
+
+1. Day 28 완료 버튼을 누른다.
+2. 앱이 `v1 완료` 상태를 저장한다.
+3. 앱은 v1 핵심 표현 복습 카드를 보여준다.
+4. 보호자 또는 학습자가 `v2 업데이트 요청`을 누른다.
+5. 앱은 업데이트 요청 payload를 저장한다.
+6. 서버형 버전에서는 이 payload를 `/api/version-requests`로 보낸다.
+7. 서버는 학습 진행률, 약한 표현, 다음 버전 잠금 해제 상태를 저장한다.
+8. v2가 준비되면 앱은 서버에서 v2 상세 커리큘럼을 내려받는다.
+
+## 서버 저장 설계
+
+### 저장할 데이터
+
+- learner id
+- active version
+- completed versions
+- current level
+- completed days
+- streak
+- weak phrases
+- favorite topics
+- chat summaries
+- review checklist
+- next version request status
+- requested at
+
+### API 초안
+
+```txt
+GET /api/learner/:id/progress
+POST /api/learner/:id/progress
+POST /api/version-requests
+GET /api/curriculum/:version?level=a1
+POST /api/review-results
+```
+
+### v2 업데이트 요청 payload
+
+```json
+{
+  "app": "AI초딩영어",
+  "completedVersion": "v1",
+  "requestedVersion": "v2",
+  "level": "A1",
+  "completedDays": 28,
+  "streak": 28,
+  "reviewBeforeUnlock": true
+}
+```
+
+## 다음 빌드에서 할 일
+
+- 서버 저장소 선택: Supabase, Firebase, Convex 중 하나
+- API 키 보호용 서버 프록시 추가
+- 사용자 프로필 생성
+- v1 완료 데이터 서버 저장
+- v2 커리큘럼 JSON 원격 로딩
+- 버전별 복습 테스트와 약점 표현 저장
+
+## 먼저 고칠 버그 (2026-06-10 점검)
+
+1. ~~**사전 테스트 정답이 항상 1번 보기**~~ ✅ 수정 완료 (2026-06-10) — 보기 순서를 셔플하고 `dataset.correct`로 채점.
+2. ~~**streak에 날짜 개념이 없음**~~ ✅ 수정 완료 (2026-06-10) — `lastCompletedDate` 저장, 하루 1회만 인정, 어제 완료가 아니면 streak 1부터.
+3. ~~**"보고 있는 날"과 "진도"가 같은 변수**~~ ✅ 수정 완료 (2026-06-10) — `viewDay`(탐색)와 `progressDay`(진도) 분리, 완료한 날은 계획표에 ✓ 표시.
+4. ~~**PWA 미완성**~~ ✅ 수정 완료 (2026-06-10) — 아이콘 180/192/512(`make_icons.py`로 생성), 서비스워커(`sw.js`, 네트워크 우선 + 오프라인 캐시) 추가.
+5. **`답변 듣기` 새로고침 후 무반응** — `lastAiReply`를 localStorage에 저장하지 않아서 앱 재시작 후 버튼이 빈 문자열을 읽는다.
+6. **Gemini 호출 설정 확인** — 모델명 `gemini-3.5-flash`가 유효한지 확인 필요. thinking 계열 모델이면 `maxOutputTokens: 120`이 생각 토큰으로 소진되어 빈 응답이 올 수 있다.
+7. **콘텐츠 순환 노출** — 커리큘럼은 7개 시드 × 4주 반복, 대화문은 레벨당 2개뿐이라 Day 3부터 Day 1 대화가 다시 나온다. 28일 분량을 주차 테마(1주 기초 → 2주 확장 → 3주 응용 → 4주 종합)로 차별화하면 반복감이 사라진다.
+
+## 다음 단계 우선순위 (제안)
+
+### 단기 — 지금 코드에서 바로
+1. 위 버그 1~5 수정 (서버 없이 가능)
+2. Day 7/14/21/28을 "복습 보스 미션"으로 교체: 그 주에 배운 문장 중 무작위 3개를 말하기로 통과해야 다음 주 열림
+3. 말하기 채점 시각화: `compareSpeech` 결과로 맞춘 단어는 초록, 놓친 단어는 회색으로 문장 위에 표시
+4. 약한 표현 자동 수집: 말하기 점수 0.7 미만 문장을 `weakPhrases`에 저장 → 표현 카드에 우선 노출 (서버 설계의 weak phrases를 로컬에서 먼저 검증)
+
+### 중기 — 서버 도입
+1. 백엔드는 **Convex 추천** (개발 환경에 이미 세팅돼 있고, 스키마 마이그레이션·실시간 동기화가 쉬움)
+2. API 키 프록시: Convex action에서 Gemini/OpenAI 호출 → 프론트에 키 노출 제거 (공개 배포의 전제 조건)
+3. `/api/version-requests` 흐름을 Convex mutation으로 구현, v2 커리큘럼 JSON 원격 로딩
+
+## 창의 아이디어 모음
+
+- ~~**자라는 캐릭터**~~ ✅ 구현 완료 (2026-06-10) — streak 7일 모자, 14일 안경, 28일 왕관(왕관이 모자를 대체).
+- ~~**내 목소리 다시 듣기**~~ ✅ 구현 완료 (2026-06-10) — 오늘 화면에서 녹음 후 "내 발음 ↔ 원어민 비교" 버튼으로 번갈아 재생.
+- ~~**AI 대화 친구 캐릭터**~~ ✅ 구현 완료 (2026-06-10) — Sunny(명랑 토끼)·Max(척척 로봇)·Coco(호기심 고양이) 중 선택, 캐릭터별 페르소나 프롬프트와 TTS 속도/음높이, 말풍선 이름표.
+- **역할 바꾸기 모드**: 대화문에서 You 역할만 말하는 게 아니라 Coach 역할을 학생이 맡고 TTS가 You를 읽어주는 모드. 질문하는 연습이 자연스럽게 된다.
+- **부모 주간 리포트**: 일주일에 한 번 "이번 주 말한 문장 12개, 잘한 표현, 연습할 표현"을 카드 한 장으로 생성(공유/캡처용). 서버 없이도 로컬 데이터로 가능.
+- **v12 포트폴리오 연결**: 매주 보스 미션 녹음을 보관해 두면 Month 12 "My English Show"에서 1년치 목소리 변화를 들려줄 수 있다 — 지금부터 녹음을 쌓는 설계가 필요한 이유.
+- **TTS 캐릭터 음성 선택**: `getBestVoice` 고정 대신 아이가 코치 목소리를 고르게 하면(차분한/명랑한) 애착이 생긴다.

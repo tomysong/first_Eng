@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#155e63" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>AI초딩영어 v.1</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero-panel" aria-labelledby="app-title">
+        <div class="brand-mark" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="face">
+            <span class="eye left"></span>
+            <span class="eye right"></span>
+            <span class="smile"></span>
+          </div>
+          <span class="acc hat"></span>
+          <span class="acc glasses"></span>
+          <span class="acc crown"></span>
+        </div>
+        <div>
+          <p class="eyebrow">AI초딩영어 v.1</p>
+          <h1 id="app-title">말하면 자라는 <span class="keep">28일</span> 영어 루틴</h1>
+          <p class="hero-copy">
+            사전 테스트로 시작 레벨을 잡고, 매일 짧은 회화 미션으로 듣고 따라 말합니다.
+          </p>
+        </div>
+      </section>
+
+      <nav class="tab-bar" aria-label="주요 화면">
+        <button class="tab active" data-tab="test" type="button">테스트</button>
+        <button class="tab" data-tab="today" type="button">오늘</button>
+        <button class="tab" data-tab="chat" type="button">AI대화</button>
+        <button class="tab" data-tab="plan" type="button">v1계획</button>
+        <button class="tab" data-tab="roadmap" type="button">1년맵</button>
+        <button class="tab" data-tab="sources" type="button">자료</button>
+      </nav>
+
+      <section class="status-strip" aria-live="polite">
+        <div>
+          <span class="label">버전</span>
+          <strong id="versionLabel">v1</strong>
+        </div>
+        <div>
+          <span class="label">현재 레벨</span>
+          <strong id="levelLabel">미정</strong>
+        </div>
+        <div>
+          <span class="label">학습일</span>
+          <strong id="dayLabel">Day 1</strong>
+        </div>
+        <div>
+          <span class="label">연속</span>
+          <strong id="streakLabel">0일</strong>
+        </div>
+      </section>
+
+      <section id="test" class="screen active" aria-labelledby="test-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Placement</p>
+            <h2 id="test-title">사전 테스트</h2>
+          </div>
+          <button id="resetBtn" class="icon-btn ghost" type="button" title="처음부터">↺</button>
+        </div>
+
+        <div id="testIntro" class="panel">
+          <h3>10문제로 말하기 시작점을 찾기</h3>
+          <p>
+            단어, 문장 이해, 상황 회화를 섞어 초등 고학년에게 맞는 시작 레벨을 정합니다.
+          </p>
+          <button id="startTestBtn" class="primary-btn" type="button">테스트 시작</button>
+        </div>
+
+        <div id="quizPanel" class="panel hidden">
+          <div class="progress-line">
+            <span id="quizCount">1 / 10</span>
+            <span id="quizTopic">Hello</span>
+          </div>
+          <h3 id="questionText"></h3>
+          <div id="answerList" class="answer-list"></div>
+        </div>
+
+        <div id="resultPanel" class="panel result-panel hidden">
+          <p class="eyebrow">Result</p>
+          <h3 id="resultTitle"></h3>
+          <p id="resultCopy"></p>
+          <button id="goTodayBtn" class="primary-btn" type="button">오늘 미션 열기</button>
+        </div>
+      </section>
+
+      <section id="today" class="screen" aria-labelledby="today-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Speaking Mission</p>
+            <h2 id="today-title">오늘의 회화</h2>
+          </div>
+          <div class="stepper" aria-label="학습일 변경">
+            <button id="prevDayBtn" class="icon-btn" type="button" title="이전 날">‹</button>
+            <button id="nextDayBtn" class="icon-btn" type="button" title="다음 날">›</button>
+          </div>
+        </div>
+
+        <article class="lesson-card">
+          <div class="lesson-top">
+            <span id="lessonBadge" class="badge">Day 1</span>
+            <span id="lessonLevel" class="badge muted">Starter</span>
+          </div>
+          <h3 id="lessonTitle"></h3>
+          <p id="lessonGoal"></p>
+
+          <div class="dialogue" id="dialogueList"></div>
+
+          <div class="controls-grid">
+            <button id="listenBtn" class="primary-btn" type="button">듣기</button>
+            <button id="repeatBtn" class="secondary-btn" type="button">한 문장씩</button>
+            <button id="recordBtn" class="secondary-btn" type="button">말하기</button>
+          </div>
+
+          <div class="voice-row">
+            <button id="voiceRecordBtn" class="secondary-btn" type="button">🎙 내 목소리 녹음</button>
+            <button id="voiceCompareBtn" class="secondary-btn" type="button" disabled>내 발음 ↔ 원어민 비교</button>
+          </div>
+
+          <div class="coach-box">
+            <span class="label">AI Coach</span>
+            <strong id="coachLine">테스트 후 오늘 미션을 추천할게요.</strong>
+            <p id="speechResult"></p>
+          </div>
+        </article>
+
+        <section class="mini-game" aria-labelledby="game-title">
+          <div class="section-head compact">
+            <h3 id="game-title">표현 카드</h3>
+            <button id="shuffleBtn" class="icon-btn" type="button" title="섞기">⟳</button>
+          </div>
+          <div id="phraseCards" class="phrase-grid"></div>
+        </section>
+      </section>
+
+      <section id="plan" class="screen" aria-labelledby="plan-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">30 Days</p>
+            <h2 id="plan-title">v1 28일 커리큘럼</h2>
+          </div>
+          <button id="completeBtn" class="secondary-btn small" type="button">오늘 완료</button>
+        </div>
+        <div id="versionGate" class="version-gate hidden"></div>
+        <div id="curriculumList" class="timeline"></div>
+      </section>
+
+      <section id="roadmap" class="screen" aria-labelledby="roadmap-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">1 Year Build Plan</p>
+            <h2 id="roadmap-title">최대 1년 압축 로드맵</h2>
+          </div>
+        </div>
+
+        <div class="panel roadmap-summary">
+          <h3>운영 원칙</h3>
+          <p>
+            각 버전은 28일 학습, 2일 복습, 1회 업데이트 요청으로 닫습니다. 다음 버전은 이전 버전에서
+            말한 문장과 약한 표현을 먼저 복습한 뒤 새 주제로 넘어갑니다.
+          </p>
+        </div>
+
+        <div id="yearRoadmap" class="roadmap-list"></div>
+      </section>
+
+      <section id="chat" class="screen" aria-labelledby="chat-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">AI Conversation</p>
+            <h2 id="chat-title">AI 영어 대화</h2>
+          </div>
+          <button id="clearChatBtn" class="icon-btn ghost" type="button" title="대화 지우기">⌫</button>
+        </div>
+
+        <div class="panel settings-panel">
+          <label>
+            <span class="label">AI 선택</span>
+            <select id="providerSelect">
+              <option value="gemini">Gemini API</option>
+              <option value="openai">OpenAI API</option>
+              <option value="local">로컬 연습</option>
+            </select>
+          </label>
+          <label>
+            <span class="label">API Key</span>
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="Gemini 또는 OpenAI API 키" />
+          </label>
+          <button id="saveAiBtn" class="secondary-btn" type="button">설정 저장</button>
+          <p class="fine-print">
+            개인 테스트용입니다. 공개 배포 시에는 API 키를 앱 안에 저장하지 말고 서버에서 보호해야 합니다.
+          </p>
+        </div>
+
+        <div class="panel character-panel">
+          <span class="label">대화 친구 고르기</span>
+          <div id="characterRow" class="character-row"></div>
+        </div>
+
+        <article class="chat-card">
+          <div id="chatLog" class="chat-log" aria-live="polite"></div>
+          <div class="chat-actions">
+            <button id="aiPromptBtn" class="secondary-btn" type="button">질문 추천</button>
+            <button id="aiMicBtn" class="secondary-btn" type="button">말로 입력</button>
+            <button id="aiReadBtn" class="secondary-btn" type="button">답변 듣기</button>
+          </div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" type="text" autocomplete="off" placeholder="영어로 말해보기: I like soccer." />
+            <button class="primary-btn" type="submit">보내기</button>
+          </form>
+        </article>
+      </section>
+
+      <section id="sources" class="screen" aria-labelledby="sources-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Free Resources</p>
+            <h2 id="sources-title">무료소스 메모</h2>
+          </div>
+        </div>
+        <div class="source-list">
+          <a href="https://learnenglishkids.britishcouncil.org/" target="_blank" rel="noreferrer">
+            <strong>British Council LearnEnglish Kids</strong>
+            <span>노래, 짧은 이야기, 단어 게임, 발음 활동</span>
+          </a>
+          <a href="https://learningenglish.voanews.com/" target="_blank" rel="noreferrer">
+            <strong>VOA Learning English</strong>
+            <span>느린 속도의 미국식 영어 듣기 자료</span>
+          </a>
+          <a href="https://www.coe.int/en/web/common-european-framework-reference-languages/level-descriptions" target="_blank" rel="noreferrer">
+            <strong>CEFR Level Descriptions</strong>
+            <span>레벨 판정 기준 참고</span>
+          </a>
+          <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API" target="_blank" rel="noreferrer">
+            <strong>MDN Web Speech API</strong>
+            <span>브라우저 내장 음성 합성/인식</span>
+          </a>
+          <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noreferrer">
+            <strong>Google AI Studio Gemini API</strong>
+            <span>무료 티어가 있는 Gemini API 키 발급 및 제한 설정</span>
+          </a>
+          <a href="https://platform.openai.com/docs/quickstart" target="_blank" rel="noreferrer">
+            <strong>OpenAI API Quickstart</strong>
+            <span>OpenAI API 키 생성 및 Responses API 사용</span>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
