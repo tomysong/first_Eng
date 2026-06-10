@@ -44,6 +44,14 @@
         <button class="tab" data-tab="sources" type="button">자료</button>
       </nav>
 
+      <section class="profile-bar" aria-label="사용자 선택">
+        <div id="profileChips" class="profile-chips"></div>
+        <div id="profileAdd" class="profile-add hidden">
+          <input id="profileNameInput" type="text" maxlength="10" autocomplete="off" placeholder="친구 이름" />
+          <button id="profileSaveBtn" class="secondary-btn small" type="button">추가</button>
+        </div>
+      </section>
+
       <section class="status-strip" aria-live="polite">
         <div>
           <span class="label">버전</span>

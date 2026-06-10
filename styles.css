@@ -343,6 +343,65 @@ h3 {
   color: white;
 }
 
+/* ---------- 프로필 바 (로그인 없는 사용자 전환) ---------- */
+
+.profile-bar {
+  margin-bottom: 12px;
+}
+
+.profile-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.profile-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-capsule);
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  font-size: var(--fs-subhead);
+  font-weight: 600;
+  letter-spacing: var(--tr-subhead);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.profile-chip:active {
+  transform: scale(0.96);
+}
+
+.profile-chip.active {
+  background: var(--teal);
+  color: white;
+}
+
+.profile-chip.add {
+  background: transparent;
+  border: 1.5px dashed var(--separator);
+  color: var(--label-2);
+}
+
+.profile-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* ---------- 상태 스트립 ---------- */
 
 .status-strip {

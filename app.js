@@ -326,26 +326,79 @@ const yearlyRoadmap = [
   },
 ];
 
+// ---- 프로필 (로그인 없는 사용자 전환) ----
+// 한 기기를 여러 아이가 같이 써도 학습 기록이 섞이지 않도록
+// 프로필별로 localStorage 키를 분리한다. 서버/계정은 필요 없다.
+
+const PROFILES_KEY = "kidEnglish.profiles";
+const ACTIVE_PROFILE_KEY = "kidEnglish.activeProfile";
+const PROFILE_EMOJIS = ["🦊", "🐻", "🐯", "🐸", "🐥", "🦄", "🐬", "🦁"];
+
+function ensureProfiles() {
+  let profiles = [];
+  try {
+    profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
+  } catch {
+    profiles = [];
+  }
+  if (!profiles.length) {
+    // 첫 프로필 "나"는 기존(접두사 없는) 데이터를 그대로 이어받는다
+    profiles = [{ id: "me", name: "나", emoji: "🙂" }];
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+    localStorage.setItem(ACTIVE_PROFILE_KEY, "me");
+  }
+  return profiles;
+}
+
+function activeProfileId() {
+  return localStorage.getItem(ACTIVE_PROFILE_KEY) || "me";
+}
+
+function currentProfile() {
+  const profiles = ensureProfiles();
+  return profiles.find((profile) => profile.id === activeProfileId()) || profiles[0];
+}
+
+function storageKey(name) {
+  const id = activeProfileId();
+  return id === "me" ? `kidEnglish.${name}` : `kidEnglish.${id}.${name}`;
+}
+
+function storeGet(name) {
+  return localStorage.getItem(storageKey(name));
+}
+
+function storeSet(name, value) {
+  localStorage.setItem(storageKey(name), value);
+}
+
+function storeRemove(name) {
+  localStorage.removeItem(storageKey(name));
+}
+
+ensureProfiles();
+
 const state = {
-  level: localStorage.getItem("kidEnglish.level") || "",
-  progressDay: Number(localStorage.getItem("kidEnglish.day") || 1),
+  level: storeGet("level") || "",
+  progressDay: Number(storeGet("day") || 1),
   viewDay: 1,
-  streak: Number(localStorage.getItem("kidEnglish.streak") || 0),
-  lastCompletedDate: localStorage.getItem("kidEnglish.lastCompletedDate") || "",
-  lastCompletedDay: Number(localStorage.getItem("kidEnglish.lastCompletedDay") || 0),
-  versionComplete: localStorage.getItem("kidEnglish.versionComplete") === "true",
-  updateRequested: localStorage.getItem("kidEnglish.updateRequested") === "true",
+  streak: Number(storeGet("streak") || 0),
+  lastCompletedDate: storeGet("lastCompletedDate") || "",
+  lastCompletedDay: Number(storeGet("lastCompletedDay") || 0),
+  versionComplete: storeGet("versionComplete") === "true",
+  updateRequested: storeGet("updateRequested") === "true",
   quizIndex: 0,
   score: 0,
   sentenceIndex: 0,
+  // AI 설정과 목소리는 기기 공통(부모가 한 번만 입력)
   aiProvider: localStorage.getItem("kidEnglish.aiProvider") || "gemini",
   aiKey: localStorage.getItem("kidEnglish.aiKey") || "",
-  chatCharacter: localStorage.getItem("kidEnglish.chatCharacter") || "sunny",
+  chatCharacter: storeGet("chatCharacter") || "sunny",
   voiceName: localStorage.getItem("kidEnglish.voiceName") || "",
-  chatMessages: JSON.parse(localStorage.getItem("kidEnglish.chatMessages") || "[]"),
-  lastAiReply: localStorage.getItem("kidEnglish.lastAiReply") || "",
-  weakPhrases: JSON.parse(localStorage.getItem("kidEnglish.weakPhrases") || "[]"),
-  bossCleared: JSON.parse(localStorage.getItem("kidEnglish.bossCleared") || "[]"),
+  chatMessages: JSON.parse(storeGet("chatMessages") || "[]"),
+  lastAiReply: storeGet("lastAiReply") || "",
+  weakPhrases: JSON.parse(storeGet("weakPhrases") || "[]"),
+  bossCleared: JSON.parse(storeGet("bossCleared") || "[]"),
   bossKey: "",
   bossTargets: [],
   bossPassed: [],
@@ -356,21 +409,21 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 function saveState() {
-  localStorage.setItem("kidEnglish.level", state.level);
-  localStorage.setItem("kidEnglish.day", String(state.progressDay));
-  localStorage.setItem("kidEnglish.streak", String(state.streak));
-  localStorage.setItem("kidEnglish.lastCompletedDate", state.lastCompletedDate);
-  localStorage.setItem("kidEnglish.lastCompletedDay", String(state.lastCompletedDay));
-  localStorage.setItem("kidEnglish.versionComplete", String(state.versionComplete));
-  localStorage.setItem("kidEnglish.updateRequested", String(state.updateRequested));
+  storeSet("level", state.level);
+  storeSet("day", String(state.progressDay));
+  storeSet("streak", String(state.streak));
+  storeSet("lastCompletedDate", state.lastCompletedDate);
+  storeSet("lastCompletedDay", String(state.lastCompletedDay));
+  storeSet("versionComplete", String(state.versionComplete));
+  storeSet("updateRequested", String(state.updateRequested));
   localStorage.setItem("kidEnglish.aiProvider", state.aiProvider);
   localStorage.setItem("kidEnglish.aiKey", state.aiKey);
-  localStorage.setItem("kidEnglish.chatCharacter", state.chatCharacter);
+  storeSet("chatCharacter", state.chatCharacter);
   localStorage.setItem("kidEnglish.voiceName", state.voiceName);
-  localStorage.setItem("kidEnglish.chatMessages", JSON.stringify(state.chatMessages.slice(-16)));
-  localStorage.setItem("kidEnglish.lastAiReply", state.lastAiReply);
-  localStorage.setItem("kidEnglish.weakPhrases", JSON.stringify(state.weakPhrases.slice(0, 12)));
-  localStorage.setItem("kidEnglish.bossCleared", JSON.stringify(state.bossCleared));
+  storeSet("chatMessages", JSON.stringify(state.chatMessages.slice(-16)));
+  storeSet("lastAiReply", state.lastAiReply);
+  storeSet("weakPhrases", JSON.stringify(state.weakPhrases.slice(0, 12)));
+  storeSet("bossCleared", JSON.stringify(state.bossCleared));
 }
 
 function dateStamp(offsetDays = 0) {
@@ -725,7 +778,7 @@ function renderVersionGate(plan) {
 
 function requestNextVersion() {
   const payload = buildUpdatePayload();
-  localStorage.setItem("kidEnglish.pendingUpdateRequest", JSON.stringify(payload));
+  storeSet("pendingUpdateRequest", JSON.stringify(payload));
   state.updateRequested = true;
   saveState();
   renderPlan();
@@ -735,6 +788,7 @@ function buildUpdatePayload() {
   const { levelKey } = getLesson();
   return {
     app: "AI초딩영어",
+    learner: currentProfile().name,
     completedVersion: APP_VERSION.id,
     requestedVersion: APP_VERSION.next,
     level: LEVELS[levelKey].label,
@@ -1495,18 +1549,19 @@ function recordSpeechScore(target, score) {
 }
 
 function resetApp() {
-  localStorage.removeItem("kidEnglish.level");
-  localStorage.removeItem("kidEnglish.day");
-  localStorage.removeItem("kidEnglish.streak");
-  localStorage.removeItem("kidEnglish.lastCompletedDate");
-  localStorage.removeItem("kidEnglish.lastCompletedDay");
-  localStorage.removeItem("kidEnglish.versionComplete");
-  localStorage.removeItem("kidEnglish.updateRequested");
-  localStorage.removeItem("kidEnglish.chatMessages");
-  localStorage.removeItem("kidEnglish.pendingUpdateRequest");
-  localStorage.removeItem("kidEnglish.lastAiReply");
-  localStorage.removeItem("kidEnglish.weakPhrases");
-  localStorage.removeItem("kidEnglish.bossCleared");
+  // 현재 프로필의 기록만 초기화한다 (다른 친구 기록은 유지)
+  storeRemove("level");
+  storeRemove("day");
+  storeRemove("streak");
+  storeRemove("lastCompletedDate");
+  storeRemove("lastCompletedDay");
+  storeRemove("versionComplete");
+  storeRemove("updateRequested");
+  storeRemove("chatMessages");
+  storeRemove("pendingUpdateRequest");
+  storeRemove("lastAiReply");
+  storeRemove("weakPhrases");
+  storeRemove("bossCleared");
   state.level = "";
   state.progressDay = 1;
   state.viewDay = 1;
@@ -1559,8 +1614,66 @@ function completeToday() {
     : `Day ${state.progressDay} 완료! 내일 앱을 열면 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
 }
 
+function renderProfileBar() {
+  const wrap = $("#profileChips");
+  const profiles = ensureProfiles();
+  const active = activeProfileId();
+  wrap.innerHTML = "";
+
+  profiles.forEach((profile) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `profile-chip ${profile.id === active ? "active" : ""}`;
+    const emoji = document.createElement("span");
+    emoji.textContent = profile.emoji;
+    chip.appendChild(emoji);
+    chip.appendChild(document.createTextNode(profile.name));
+    chip.addEventListener("click", () => switchProfile(profile.id));
+    wrap.appendChild(chip);
+  });
+
+  const addChip = document.createElement("button");
+  addChip.type = "button";
+  addChip.className = "profile-chip add";
+  addChip.textContent = "＋ 친구 추가";
+  addChip.addEventListener("click", () => {
+    $("#profileAdd").classList.toggle("hidden");
+    $("#profileNameInput").focus();
+  });
+  wrap.appendChild(addChip);
+}
+
+function switchProfile(id) {
+  if (id === activeProfileId()) return;
+  localStorage.setItem(ACTIVE_PROFILE_KEY, id);
+  // 프로필별 상태를 처음부터 다시 읽도록 새로고침
+  location.reload();
+}
+
+function addProfile() {
+  const name = $("#profileNameInput").value.trim().slice(0, 10);
+  if (!name) {
+    $("#profileNameInput").focus();
+    return;
+  }
+  const profiles = ensureProfiles();
+  const id = `p${Date.now().toString(36)}`;
+  const emoji = PROFILE_EMOJIS[(profiles.length - 1) % PROFILE_EMOJIS.length];
+  profiles.push({ id, name, emoji });
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  localStorage.setItem(ACTIVE_PROFILE_KEY, id);
+  location.reload();
+}
+
 function bindEvents() {
   $$(".tab").forEach((tab) => tab.addEventListener("click", () => switchTab(tab.dataset.tab)));
+  $("#profileSaveBtn").addEventListener("click", addProfile);
+  $("#profileNameInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addProfile();
+    }
+  });
   $("#startTestBtn").addEventListener("click", startTest);
   $("#goTodayBtn").addEventListener("click", () => switchTab("today"));
   $("#resetBtn").addEventListener("click", resetApp);
@@ -1608,6 +1721,7 @@ if ("serviceWorker" in navigator) {
 window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
 applyHybridProgress();
 bindEvents();
+renderProfileBar();
 renderVoiceOptions();
 updateStatus();
 renderToday();
