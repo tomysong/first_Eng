@@ -12,8 +12,19 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="profileGate" class="profile-gate" aria-label="프로필 선택">
+      <p class="eyebrow">AI초딩영어</p>
+      <h2>누가 공부할까요?</h2>
+      <div id="profileGrid" class="profile-grid"></div>
+      <div id="gateAdd" class="gate-add hidden">
+        <input id="profileNameInput" type="text" maxlength="10" autocomplete="off" placeholder="친구 이름" />
+        <button id="profileSaveBtn" class="secondary-btn small" type="button">추가</button>
+      </div>
+    </div>
+
     <main class="app-shell">
       <section class="hero-panel" aria-labelledby="app-title">
+        <button id="profileSwitchBtn" class="profile-switch" type="button" title="프로필 바꾸기"></button>
         <div class="brand-mark" aria-hidden="true">
           <div class="orbit orbit-one"></div>
           <div class="orbit orbit-two"></div>
@@ -39,18 +50,11 @@
         <button class="tab active" data-tab="test" type="button">테스트</button>
         <button class="tab" data-tab="today" type="button">오늘</button>
         <button class="tab" data-tab="chat" type="button">AI대화</button>
-        <button class="tab" data-tab="plan" type="button">v1계획</button>
-        <button class="tab" data-tab="roadmap" type="button">1년맵</button>
-        <button class="tab" data-tab="sources" type="button">자료</button>
+        <button class="tab parent-only" data-tab="plan" type="button">v1계획</button>
+        <button class="tab parent-only" data-tab="roadmap" type="button">1년맵</button>
+        <button class="tab parent-only" data-tab="sources" type="button">자료</button>
+        <button class="tab" data-tab="parent" type="button">🔒 보호자</button>
       </nav>
-
-      <section class="profile-bar" aria-label="사용자 선택">
-        <div id="profileChips" class="profile-chips"></div>
-        <div id="profileAdd" class="profile-add hidden">
-          <input id="profileNameInput" type="text" maxlength="10" autocomplete="off" placeholder="친구 이름" />
-          <button id="profileSaveBtn" class="secondary-btn small" type="button">추가</button>
-        </div>
-      </section>
 
       <section class="status-strip" aria-live="polite">
         <div>
@@ -148,6 +152,8 @@
             <strong id="coachLine">테스트 후 오늘 미션을 추천할게요.</strong>
             <p id="speechResult"></p>
           </div>
+
+          <button id="completeBtn" class="primary-btn complete-btn" type="button">오늘 완료</button>
         </article>
 
         <section class="mini-game" aria-labelledby="game-title">
@@ -165,7 +171,6 @@
             <p class="eyebrow">30 Days</p>
             <h2 id="plan-title">v1 28일 커리큘럼</h2>
           </div>
-          <button id="completeBtn" class="secondary-btn small" type="button">오늘 완료</button>
         </div>
         <div id="versionGate" class="version-gate hidden"></div>
         <div id="curriculumList" class="timeline"></div>
@@ -199,25 +204,6 @@
           <button id="clearChatBtn" class="icon-btn ghost" type="button" title="대화 지우기">⌫</button>
         </div>
 
-        <div class="panel settings-panel">
-          <label>
-            <span class="label">AI 선택</span>
-            <select id="providerSelect">
-              <option value="gemini">Gemini API</option>
-              <option value="openai">OpenAI API</option>
-              <option value="local">로컬 연습</option>
-            </select>
-          </label>
-          <label>
-            <span class="label">API Key</span>
-            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="Gemini 또는 OpenAI API 키" />
-          </label>
-          <button id="saveAiBtn" class="secondary-btn" type="button">설정 저장</button>
-          <p class="fine-print">
-            개인 테스트용입니다. 공개 배포 시에는 API 키를 앱 안에 저장하지 말고 서버에서 보호해야 합니다.
-          </p>
-        </div>
-
         <div class="panel character-panel">
           <span class="label">대화 친구 고르기</span>
           <div id="characterRow" class="character-row"></div>
@@ -235,6 +221,57 @@
             <button class="primary-btn" type="submit">보내기</button>
           </form>
         </article>
+      </section>
+
+      <section id="parent" class="screen" aria-labelledby="parent-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Parents</p>
+            <h2 id="parent-title">보호자 공간</h2>
+          </div>
+          <button id="parentLockBtn" class="secondary-btn small hidden" type="button">아이 화면으로</button>
+        </div>
+
+        <div id="parentGatePanel" class="panel parent-gate">
+          <h3>보호자 확인</h3>
+          <p>아이가 실수로 들어오지 않도록 간단한 문제를 풀어주세요.</p>
+          <p id="parentQuestion" class="parent-question"></p>
+          <form id="parentGateForm" class="parent-gate-form">
+            <input id="parentAnswerInput" type="number" inputmode="numeric" autocomplete="off" placeholder="정답" />
+            <button class="primary-btn" type="submit">확인</button>
+          </form>
+          <p id="parentGateMsg" class="fine-print"></p>
+        </div>
+
+        <div id="parentContent" class="hidden">
+          <div class="panel parent-summary">
+            <h3>학습 현황</h3>
+            <div id="profileSummary" class="profile-summary"></div>
+          </div>
+
+          <div class="panel settings-panel">
+            <label>
+              <span class="label">AI 선택</span>
+              <select id="providerSelect">
+                <option value="gemini">Gemini API</option>
+                <option value="openai">OpenAI API</option>
+                <option value="local">로컬 연습</option>
+              </select>
+            </label>
+            <label>
+              <span class="label">API Key</span>
+              <input id="apiKeyInput" type="password" autocomplete="off" placeholder="Gemini 또는 OpenAI API 키" />
+            </label>
+            <button id="saveAiBtn" class="secondary-btn" type="button">설정 저장</button>
+            <p class="fine-print">
+              API 키는 이 기기에만 저장되고 모든 프로필이 함께 사용합니다. 키를 입력하면 듣기 음성도 AI 목소리로 바뀝니다.
+            </p>
+          </div>
+
+          <p class="fine-print parent-note">
+            보호자 모드에서는 상단에 v1계획 · 1년맵 · 자료 탭이 열립니다. "아이 화면으로"를 누르면 다시 잠깁니다.
+          </p>
+        </div>
       </section>
 
       <section id="sources" class="screen" aria-labelledby="sources-title">

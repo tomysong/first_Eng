@@ -516,6 +516,10 @@ function switchTab(tabId) {
   if (tabId === "plan") renderPlan();
   if (tabId === "chat") renderChat();
   if (tabId === "roadmap") renderRoadmap();
+  if (tabId === "parent") {
+    if (isParentMode()) renderParentDashboard();
+    else newParentQuestion();
+  }
 }
 
 function startTest() {
@@ -630,6 +634,8 @@ function renderToday() {
     $("#coachLine").textContent = `${APP_VERSION.id}를 마쳤어요. 커리큘럼 탭에서 복습 후 ${APP_VERSION.next} 업데이트 요청을 확인하세요.`;
   }
   $("#speechResult").textContent = "";
+  $("#completeBtn").textContent =
+    state.lastCompletedDate === dateStamp() ? "오늘 완료 ✓" : "오늘 완료";
 
   if (day.boss) {
     renderBossMission();
@@ -748,8 +754,6 @@ function renderPlan() {
 
 function renderVersionGate(plan) {
   const gate = $("#versionGate");
-  $("#completeBtn").textContent =
-    state.lastCompletedDate === dateStamp() ? "오늘 완료 ✓" : "오늘 완료";
   if (!state.versionComplete && state.progressDay < APP_VERSION.days) {
     gate.classList.add("hidden");
     gate.innerHTML = "";
@@ -1614,39 +1618,69 @@ function completeToday() {
     : `Day ${state.progressDay} 완료! 내일 앱을 열면 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
 }
 
-function renderProfileBar() {
-  const wrap = $("#profileChips");
+// 넷플릭스 스타일 프로필 게이트: 앱을 열면 먼저 프로필을 고르고 본 화면으로 진입
+const PROFILE_COLORS = ["#d8f3e7", "#d9ecff", "#ffe9c7", "#ffe0d8", "#ece4ff", "#fff3c4", "#dff6ff", "#ffe2ef"];
+
+function renderProfileGate() {
+  const grid = $("#profileGrid");
   const profiles = ensureProfiles();
   const active = activeProfileId();
-  wrap.innerHTML = "";
+  grid.innerHTML = "";
 
-  profiles.forEach((profile) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = `profile-chip ${profile.id === active ? "active" : ""}`;
-    const emoji = document.createElement("span");
-    emoji.textContent = profile.emoji;
-    chip.appendChild(emoji);
-    chip.appendChild(document.createTextNode(profile.name));
-    chip.addEventListener("click", () => switchProfile(profile.id));
-    wrap.appendChild(chip);
+  profiles.forEach((profile, index) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `profile-card ${profile.id === active ? "current" : ""}`;
+    const avatar = document.createElement("span");
+    avatar.className = "profile-avatar";
+    avatar.style.background = PROFILE_COLORS[index % PROFILE_COLORS.length];
+    avatar.textContent = profile.emoji;
+    const name = document.createElement("span");
+    name.className = "profile-name";
+    name.textContent = profile.name;
+    card.appendChild(avatar);
+    card.appendChild(name);
+    card.addEventListener("click", () => selectProfile(profile.id));
+    grid.appendChild(card);
   });
 
-  const addChip = document.createElement("button");
-  addChip.type = "button";
-  addChip.className = "profile-chip add";
-  addChip.textContent = "＋ 친구 추가";
-  addChip.addEventListener("click", () => {
-    $("#profileAdd").classList.toggle("hidden");
+  const addCard = document.createElement("button");
+  addCard.type = "button";
+  addCard.className = "profile-card add";
+  addCard.innerHTML = `<span class="profile-avatar">＋</span><span class="profile-name">새 프로필</span>`;
+  addCard.addEventListener("click", () => {
+    $("#gateAdd").classList.toggle("hidden");
     $("#profileNameInput").focus();
   });
-  wrap.appendChild(addChip);
+  grid.appendChild(addCard);
 }
 
-function switchProfile(id) {
-  if (id === activeProfileId()) return;
+function showProfileGate() {
+  renderProfileGate();
+  $("#gateAdd").classList.add("hidden");
+  $("#profileGate").classList.remove("hidden");
+}
+
+function hideProfileGate() {
+  $("#profileGate").classList.add("hidden");
+  updateProfileSwitch();
+}
+
+function updateProfileSwitch() {
+  const profile = currentProfile();
+  const button = $("#profileSwitchBtn");
+  button.textContent = profile.emoji;
+  button.title = `${profile.name} · 프로필 바꾸기`;
+}
+
+function selectProfile(id) {
+  if (id === activeProfileId()) {
+    hideProfileGate();
+    return;
+  }
+  // 다른 프로필은 상태를 처음부터 다시 읽도록 새로고침하고, 게이트는 건너뛴다
+  sessionStorage.setItem("kidEnglish.autoEnter", "1");
   localStorage.setItem(ACTIVE_PROFILE_KEY, id);
-  // 프로필별 상태를 처음부터 다시 읽도록 새로고침
   location.reload();
 }
 
@@ -1662,12 +1696,95 @@ function addProfile() {
   profiles.push({ id, name, emoji });
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
   localStorage.setItem(ACTIVE_PROFILE_KEY, id);
+  sessionStorage.setItem("kidEnglish.autoEnter", "1");
   location.reload();
+}
+
+// ---- 보호자 모드: 아이 화면(테스트·오늘·AI대화)과 보호자 화면 분리 ----
+
+let parentGateAnswer = 0;
+
+function isParentMode() {
+  return sessionStorage.getItem("kidEnglish.parentMode") === "1";
+}
+
+function updateModeUI() {
+  document.body.classList.toggle("parent-mode", isParentMode());
+  $("#parentGatePanel").classList.toggle("hidden", isParentMode());
+  $("#parentContent").classList.toggle("hidden", !isParentMode());
+  $("#parentLockBtn").classList.toggle("hidden", !isParentMode());
+}
+
+function newParentQuestion() {
+  const a = 11 + Math.floor(Math.random() * 38);
+  const b = 12 + Math.floor(Math.random() * 37);
+  parentGateAnswer = a + b;
+  $("#parentQuestion").textContent = `${a} + ${b} = ?`;
+  $("#parentAnswerInput").value = "";
+  $("#parentGateMsg").textContent = "";
+}
+
+function submitParentGate(event) {
+  event.preventDefault();
+  if (Number($("#parentAnswerInput").value) === parentGateAnswer) {
+    sessionStorage.setItem("kidEnglish.parentMode", "1");
+    updateModeUI();
+    renderParentDashboard();
+  } else {
+    newParentQuestion();
+    $("#parentGateMsg").textContent = "정답이 아니에요. 새 문제로 다시 풀어주세요.";
+  }
+}
+
+function lockParentMode() {
+  sessionStorage.removeItem("kidEnglish.parentMode");
+  updateModeUI();
+  switchTab("today");
+}
+
+function profileStoreGet(profileId, name) {
+  const key = profileId === "me" ? `kidEnglish.${name}` : `kidEnglish.${profileId}.${name}`;
+  return localStorage.getItem(key);
+}
+
+function renderParentDashboard() {
+  const wrap = $("#profileSummary");
+  wrap.innerHTML = "";
+  ensureProfiles().forEach((profile) => {
+    const levelKey = profileStoreGet(profile.id, "level") || "";
+    const day = Number(profileStoreGet(profile.id, "day") || 1);
+    const streak = Number(profileStoreGet(profile.id, "streak") || 0);
+    const done = profileStoreGet(profile.id, "versionComplete") === "true";
+    let weak = [];
+    try {
+      weak = JSON.parse(profileStoreGet(profile.id, "weakPhrases") || "[]");
+    } catch {
+      weak = [];
+    }
+
+    const row = document.createElement("div");
+    row.className = "summary-row";
+    const title = document.createElement("strong");
+    title.textContent = `${profile.emoji} ${profile.name}`;
+    const stats = document.createElement("span");
+    stats.textContent = [
+      levelKey ? `레벨 ${LEVELS[levelKey]?.label || levelKey}` : "테스트 전",
+      done ? `${APP_VERSION.id} 완료` : `Day ${day}`,
+      `연속 ${streak}일`,
+      weak.length ? `복습할 표현 ${weak.length}개` : "복습 카드 없음",
+    ].join(" · ");
+    row.appendChild(title);
+    row.appendChild(stats);
+    wrap.appendChild(row);
+  });
 }
 
 function bindEvents() {
   $$(".tab").forEach((tab) => tab.addEventListener("click", () => switchTab(tab.dataset.tab)));
   $("#profileSaveBtn").addEventListener("click", addProfile);
+  $("#profileSwitchBtn").addEventListener("click", showProfileGate);
+  $("#parentGateForm").addEventListener("submit", submitParentGate);
+  $("#parentLockBtn").addEventListener("click", lockParentMode);
   $("#profileNameInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -1721,7 +1838,14 @@ if ("serviceWorker" in navigator) {
 window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
 applyHybridProgress();
 bindEvents();
-renderProfileBar();
+renderProfileGate();
+updateProfileSwitch();
+updateModeUI();
+if (sessionStorage.getItem("kidEnglish.autoEnter")) {
+  // 프로필 선택/추가 직후의 새로고침에서는 게이트를 건너뛴다
+  sessionStorage.removeItem("kidEnglish.autoEnter");
+  hideProfileGate();
+}
 renderVoiceOptions();
 updateStatus();
 renderToday();
