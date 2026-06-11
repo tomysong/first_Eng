@@ -518,7 +518,7 @@ function switchTab(tabId) {
   if (tabId === "roadmap") renderRoadmap();
   if (tabId === "parent") {
     if (isParentMode()) renderParentDashboard();
-    else newParentQuestion();
+    else openParentGate();
   }
 }
 
@@ -1701,8 +1701,15 @@ function addProfile() {
 }
 
 // ---- 보호자 모드: 아이 화면(테스트·오늘·AI대화)과 보호자 화면 분리 ----
+// 보호자가 직접 만든 4자리 비밀번호로 잠근다. 5회 오답 시 60초 잠금,
+// 재설정은 두 자리 곱셈 검증을 거친다.
 
-let parentGateAnswer = 0;
+const PIN_KEY = "kidEnglish.parentPinHash";
+const PIN_FAILS_KEY = "kidEnglish.pinFails";
+const PIN_LOCK_KEY = "kidEnglish.pinLockUntil";
+
+let gateMode = "enter"; // enter | setup | reset
+let resetAnswer = 0;
 
 function isParentMode() {
   return sessionStorage.getItem("kidEnglish.parentMode") === "1";
@@ -1715,25 +1722,120 @@ function updateModeUI() {
   $("#parentLockBtn").classList.toggle("hidden", !isParentMode());
 }
 
-function newParentQuestion() {
-  const a = 11 + Math.floor(Math.random() * 38);
-  const b = 12 + Math.floor(Math.random() * 37);
-  parentGateAnswer = a + b;
-  $("#parentQuestion").textContent = `${a} + ${b} = ?`;
-  $("#parentAnswerInput").value = "";
-  $("#parentGateMsg").textContent = "";
+function hasParentPin() {
+  return Boolean(localStorage.getItem(PIN_KEY));
 }
 
-function submitParentGate(event) {
-  event.preventDefault();
-  if (Number($("#parentAnswerInput").value) === parentGateAnswer) {
-    sessionStorage.setItem("kidEnglish.parentMode", "1");
-    updateModeUI();
-    renderParentDashboard();
+async function hashPin(pin) {
+  if (!window.crypto?.subtle) return `plain:${pin}`;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`kidEnglish:${pin}`)
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function openParentGate() {
+  gateMode = hasParentPin() ? "enter" : "setup";
+  renderParentGate("");
+}
+
+function renderParentGate(message) {
+  const titles = {
+    enter: "보호자 확인",
+    setup: "보호자 비밀번호 만들기",
+    reset: "비밀번호 재설정",
+  };
+  const descs = {
+    enter: "보호자 비밀번호 4자리를 입력해주세요.",
+    setup: "아이가 모르는 숫자 4자리로 정해주세요. 이 기기에만 저장됩니다.",
+    reset: "보호자 확인을 위해 곱셈 문제를 풀면 비밀번호를 새로 만들 수 있어요.",
+  };
+  $("#parentGateTitle").textContent = titles[gateMode];
+  $("#parentGateDesc").textContent = descs[gateMode];
+
+  const question = $("#parentQuestion");
+  if (gateMode === "reset") {
+    const a = 23 + Math.floor(Math.random() * 60);
+    const b = 13 + Math.floor(Math.random() * 60);
+    resetAnswer = a * b;
+    question.textContent = `${a} × ${b} = ?`;
+    question.classList.remove("hidden");
   } else {
-    newParentQuestion();
-    $("#parentGateMsg").textContent = "정답이 아니에요. 새 문제로 다시 풀어주세요.";
+    question.classList.add("hidden");
   }
+
+  const input = $("#parentAnswerInput");
+  input.value = "";
+  input.type = gateMode === "reset" ? "tel" : "password";
+  input.placeholder = gateMode === "reset" ? "정답" : "비밀번호 4자리";
+  $("#parentPinConfirm").value = "";
+  $("#parentPinConfirm").classList.toggle("hidden", gateMode !== "setup");
+  $("#pinForgotBtn").classList.toggle("hidden", gateMode !== "enter");
+  $("#parentGateMsg").textContent = message || "";
+}
+
+function unlockParentMode() {
+  localStorage.setItem(PIN_FAILS_KEY, "0");
+  sessionStorage.setItem("kidEnglish.parentMode", "1");
+  updateModeUI();
+  renderParentDashboard();
+}
+
+async function submitParentGate(event) {
+  event.preventDefault();
+  const value = $("#parentAnswerInput").value.trim();
+
+  if (gateMode === "setup") {
+    if (!/^\d{4}$/.test(value)) {
+      renderParentGate("숫자 4자리로 입력해주세요.");
+      return;
+    }
+    if (value !== $("#parentPinConfirm").value.trim()) {
+      renderParentGate("두 입력이 서로 달라요. 다시 확인해주세요.");
+      return;
+    }
+    localStorage.setItem(PIN_KEY, await hashPin(value));
+    unlockParentMode();
+    return;
+  }
+
+  if (gateMode === "reset") {
+    if (Number(value) === resetAnswer) {
+      localStorage.removeItem(PIN_KEY);
+      gateMode = "setup";
+      renderParentGate("확인됐어요. 새 비밀번호를 만들어주세요.");
+    } else {
+      renderParentGate("정답이 아니에요. 새 문제로 다시 풀어주세요.");
+    }
+    return;
+  }
+
+  // enter 모드
+  const lockUntil = Number(localStorage.getItem(PIN_LOCK_KEY) || 0);
+  if (Date.now() < lockUntil) {
+    const seconds = Math.ceil((lockUntil - Date.now()) / 1000);
+    renderParentGate(`시도가 너무 많았어요. ${seconds}초 후에 다시 해주세요.`);
+    return;
+  }
+  if ((await hashPin(value)) === localStorage.getItem(PIN_KEY)) {
+    unlockParentMode();
+    return;
+  }
+  const fails = Number(localStorage.getItem(PIN_FAILS_KEY) || 0) + 1;
+  if (fails >= 5) {
+    localStorage.setItem(PIN_FAILS_KEY, "0");
+    localStorage.setItem(PIN_LOCK_KEY, String(Date.now() + 60000));
+    renderParentGate("5번 틀려서 60초 동안 잠겼어요.");
+  } else {
+    localStorage.setItem(PIN_FAILS_KEY, String(fails));
+    renderParentGate(`비밀번호가 달라요. (${fails}/5)`);
+  }
+}
+
+function startPinReset() {
+  gateMode = "reset";
+  renderParentGate("");
 }
 
 function lockParentMode() {
@@ -1785,6 +1887,7 @@ function bindEvents() {
   $("#profileSwitchBtn").addEventListener("click", showProfileGate);
   $("#parentGateForm").addEventListener("submit", submitParentGate);
   $("#parentLockBtn").addEventListener("click", lockParentMode);
+  $("#pinForgotBtn").addEventListener("click", startPinReset);
   $("#profileNameInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

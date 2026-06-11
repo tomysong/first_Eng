@@ -233,14 +233,16 @@
         </div>
 
         <div id="parentGatePanel" class="panel parent-gate">
-          <h3>보호자 확인</h3>
-          <p>아이가 실수로 들어오지 않도록 간단한 문제를 풀어주세요.</p>
-          <p id="parentQuestion" class="parent-question"></p>
+          <h3 id="parentGateTitle">보호자 확인</h3>
+          <p id="parentGateDesc">보호자 비밀번호 4자리를 입력해주세요.</p>
+          <p id="parentQuestion" class="parent-question hidden"></p>
           <form id="parentGateForm" class="parent-gate-form">
-            <input id="parentAnswerInput" type="number" inputmode="numeric" autocomplete="off" placeholder="정답" />
+            <input id="parentAnswerInput" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="비밀번호 4자리" />
+            <input id="parentPinConfirm" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="한 번 더 입력" class="hidden" />
             <button class="primary-btn" type="submit">확인</button>
           </form>
           <p id="parentGateMsg" class="fine-print"></p>
+          <button id="pinForgotBtn" class="text-btn" type="button">비밀번호를 잊었어요</button>
         </div>
 
         <div id="parentContent" class="hidden">

@@ -485,22 +485,40 @@ body:not(.parent-mode) .tab.parent-only {
 
 .parent-gate-form {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 8px;
-  max-width: 320px;
+  max-width: 280px;
   margin: 0 auto;
 }
 
 .parent-gate-form .primary-btn {
-  width: auto;
-  margin-top: 0;
-  padding: 0 24px;
+  margin-top: 4px;
 }
 
 .parent-gate-form input {
   text-align: center;
   font-size: var(--fs-title3);
   font-weight: 600;
+  letter-spacing: 4px;
+}
+
+.parent-gate-form input::placeholder {
+  letter-spacing: var(--tr-subhead);
+  font-size: var(--fs-subhead);
+  font-weight: 500;
+}
+
+.text-btn {
+  margin-top: 12px;
+  padding: 8px;
+  border: 0;
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  font-size: var(--fs-subhead);
+  font-weight: 600;
+  letter-spacing: var(--tr-subhead);
+  cursor: pointer;
 }
 
 #parentGateMsg {
