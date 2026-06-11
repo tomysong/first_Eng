@@ -209,10 +209,19 @@
           <div id="characterRow" class="character-row"></div>
         </div>
 
+        <div class="panel mission-panel">
+          <div class="mission-head">
+            <span class="label">오늘의 대화 미션</span>
+            <strong id="missionScore" class="mission-score">0 / 3</strong>
+          </div>
+          <p class="mission-guide">대화하면서 이 표현을 직접 말하면 미션 성공! ⭐</p>
+          <div id="missionList" class="mission-list"></div>
+        </div>
+
         <article class="chat-card">
           <div id="chatLog" class="chat-log" aria-live="polite"></div>
           <div class="chat-actions">
-            <button id="aiPromptBtn" class="secondary-btn" type="button">질문 추천</button>
+            <button id="aiPromptBtn" class="secondary-btn" type="button">💡 힌트</button>
             <button id="aiMicBtn" class="secondary-btn" type="button">말로 입력</button>
             <button id="aiReadBtn" class="secondary-btn" type="button">답변 듣기</button>
           </div>
