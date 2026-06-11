@@ -24,6 +24,32 @@ import {
 } from "./modules/profiles.js";
 import { applyHybridProgress, dateStamp } from "./modules/progress.js";
 
+// 키 프록시 서버 주소(Cloudflare Worker). 값이 있으면 아이가 키 입력 없이
+// AI 대화·목소리를 쓰고 키는 절대 노출되지 않는다. 배포법: proxy/README.md
+// 비워 두면 예전처럼 보호자가 키를 직접 입력하는 방식으로 동작한다.
+const GEMINI_PROXY = "https://kid-eng-proxy.hssong1107.workers.dev";
+const GEMINI_BASE = "https://generativelanguage.googleapis.com";
+
+// 프록시가 있으면 Gemini를 키 없이 호출할 수 있으므로 항상 사용 가능
+function geminiReady() {
+  return Boolean(GEMINI_PROXY) || Boolean(state.aiKey);
+}
+
+// 실제로 사용할 AI 제공자(프록시가 있으면 Gemini 고정)
+function effectiveProvider() {
+  return GEMINI_PROXY ? "gemini" : state.aiProvider;
+}
+
+function geminiUrl(model) {
+  return `${GEMINI_PROXY || GEMINI_BASE}/v1beta/models/${model}:generateContent`;
+}
+
+function geminiHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (!GEMINI_PROXY) headers["x-goog-api-key"] = state.aiKey;
+  return headers;
+}
+
 ensureProfiles();
 
 function readArray(name) {
@@ -633,10 +659,11 @@ async function sendAiMessage(text) {
   addChatBubble("system", "AI가 짧고 쉬운 영어 답변을 준비하고 있어요...");
 
   try {
+    const provider = effectiveProvider();
     const reply =
-      state.aiProvider === "gemini"
+      provider === "gemini"
         ? await callGemini(cleanText)
-        : state.aiProvider === "openai"
+        : provider === "openai"
           ? await callOpenAI(cleanText)
           : makeLocalReply(cleanText);
     pushChat("ai", reply);
@@ -653,30 +680,40 @@ async function sendAiMessage(text) {
 }
 
 async function callGemini(text) {
-  if (!state.aiKey) return makeLocalReply(text);
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
-    {
+  if (!geminiReady()) return makeLocalReply(text);
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: getCoachPrompt() }] },
+    contents: buildGeminiHistory(text),
+    generationConfig: {
+      temperature: 0.7,
+      // thinking 토큰이 출력 한도에 합산되어 빈 응답이 오는 것을 방지
+      maxOutputTokens: 400,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  // Gemini가 일시적으로 바쁠 때(503/UNAVAILABLE)는 잠깐 쉬고 다시 시도
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(geminiUrl("gemini-3.5-flash"), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": state.aiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: getCoachPrompt() }] },
-        contents: buildGeminiHistory(text),
-        generationConfig: {
-          temperature: 0.7,
-          // thinking 토큰이 출력 한도에 합산되어 빈 응답이 오는 것을 방지
-          maxOutputTokens: 400,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
+      headers: geminiHeaders(),
+      body,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      return (
+        data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("\n").trim() ||
+        makeLocalReply(text)
+      );
     }
-  );
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "Gemini API 오류");
-  return data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("\n").trim() || makeLocalReply(text);
+    const busy = response.status === 503 || data.error?.status === "UNAVAILABLE";
+    if (busy && attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+      continue;
+    }
+    throw new Error(data.error?.message || "Gemini API 오류");
+  }
+  return makeLocalReply(text);
 }
 
 function buildGeminiHistory(text) {
@@ -913,20 +950,17 @@ function stopAllAudio() {
 }
 
 function cloudTtsEnabled() {
-  return (
-    !state.voiceName &&
-    Boolean(state.aiKey) &&
-    (state.aiProvider === "gemini" || state.aiProvider === "openai") &&
-    Date.now() >= cloudTtsBlockedUntil
-  );
+  if (state.voiceName || Date.now() < cloudTtsBlockedUntil) return false;
+  if (GEMINI_PROXY) return true;
+  return Boolean(state.aiKey) && (state.aiProvider === "gemini" || state.aiProvider === "openai");
 }
 
 function defaultCloudVoice() {
-  return state.aiProvider === "gemini" ? "Leda" : "marin";
+  return effectiveProvider() === "gemini" ? "Leda" : "marin";
 }
 
 function characterCloudVoice(character) {
-  return state.aiProvider === "gemini" ? character.geminiVoice : character.openaiVoice;
+  return effectiveProvider() === "gemini" ? character.geminiVoice : character.openaiVoice;
 }
 
 function clearTtsCache() {
@@ -967,13 +1001,10 @@ async function fetchGeminiTts(text, voice) {
   let lastError = new Error("Gemini TTS 오류");
   for (const model of models) {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      geminiUrl(model),
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": state.aiKey,
-        },
+        headers: geminiHeaders(),
         body: JSON.stringify({
           contents: [{ parts: [{ text }] }],
           generationConfig: {
@@ -1023,11 +1054,12 @@ async function fetchOpenAiTts(text, voice) {
 }
 
 async function fetchCloudAudio(text, voice) {
-  const key = `${state.aiProvider}:${voice}:${text}`;
+  const provider = effectiveProvider();
+  const key = `${provider}:${voice}:${text}`;
   if (ttsCache.has(key)) return ttsCache.get(key);
 
   const url =
-    state.aiProvider === "gemini" ? await fetchGeminiTts(text, voice) : await fetchOpenAiTts(text, voice);
+    provider === "gemini" ? await fetchGeminiTts(text, voice) : await fetchOpenAiTts(text, voice);
   ttsCache.set(key, url);
   if (ttsCache.size > 24) {
     const oldest = ttsCache.keys().next().value;
@@ -1663,6 +1695,15 @@ if ("serviceWorker" in navigator) {
 window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
 applyHybridProgress(state, APP_VERSION, saveState);
 bindEvents();
+if (GEMINI_PROXY) {
+  // 서버 프록시 사용 시 키 입력이 필요 없으므로 안내로 대체
+  state.aiProvider = "gemini";
+  const keyInput = $("#apiKeyInput");
+  if (keyInput) {
+    keyInput.disabled = true;
+    keyInput.placeholder = "서버에 연결됨 — 키 입력 불필요";
+  }
+}
 renderProfileGate();
 updateProfileSwitch();
 updateModeUI();
