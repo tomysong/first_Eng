@@ -1,530 +1,39 @@
-const LEVELS = {
-  starter: {
-    label: "Starter",
-    range: "처음~A0",
-    coach: "짧은 인사와 내 이야기부터 시작하면 좋아요.",
-  },
-  a1: {
-    label: "A1",
-    range: "기초 회화",
-    coach: "문장 하나를 바꿔 말하는 연습을 늘려볼게요.",
-  },
-  a1plus: {
-    label: "A1+",
-    range: "자신감 확장",
-    coach: "이유 말하기와 짧은 질문 주고받기를 섞어볼게요.",
-  },
-};
-
-const APP_VERSION = {
-  id: "v1",
-  title: "AI초딩영어 v.1",
-  days: 28,
-  next: "v2",
-};
-
-const quiz = [
-  {
-    topic: "Greeting",
-    question: "'안녕, 만나서 반가워'에 가장 가까운 문장은?",
-    answers: ["Hi, nice to meet you.", "I am eleven years old.", "It is under the desk."],
-    correct: 0,
-  },
-  {
-    topic: "Feeling",
-    question: "친구가 'How are you?'라고 물으면 자연스러운 대답은?",
-    answers: ["I am good, thanks.", "It is a pencil.", "She likes pizza."],
-    correct: 0,
-  },
-  {
-    topic: "Like",
-    question: "'나는 축구를 좋아해'를 고르세요.",
-    answers: ["I like soccer.", "I have soccer.", "I am soccer."],
-    correct: 0,
-  },
-  {
-    topic: "Question",
-    question: "'너는 무엇을 좋아하니?'",
-    answers: ["What do you like?", "Where is your bag?", "Can I go now?"],
-    correct: 0,
-  },
-  {
-    topic: "Food",
-    question: "식당에서 물을 부탁할 때 자연스러운 말은?",
-    answers: ["Can I have some water?", "I can water some have.", "Where water can I?"],
-    correct: 0,
-  },
-  {
-    topic: "Time",
-    question: "'나는 7시에 일어나'를 고르세요.",
-    answers: ["I get up at seven.", "I go seven up.", "I seven get at up."],
-    correct: 0,
-  },
-  {
-    topic: "Reason",
-    question: "'나는 그것을 좋아해, 왜냐하면 재미있거든'을 고르세요.",
-    answers: ["I like it because it is fun.", "I like it so it is fun.", "I like it but it is fun."],
-    correct: 0,
-  },
-  {
-    topic: "Past",
-    question: "'어제 영화를 봤어'에 가장 가까운 문장은?",
-    answers: ["I watched a movie yesterday.", "I watch a movie yesterday.", "I have watch a movie yesterday."],
-    correct: 0,
-  },
-  {
-    topic: "Compare",
-    question: "'수학은 미술보다 더 어려워'를 고르세요.",
-    answers: ["Math is harder than art.", "Math is more hard than art.", "Math is harder then art."],
-    correct: 0,
-  },
-  {
-    topic: "Opinion",
-    question: "'나는 독서가 유용하다고 생각해, 왜냐하면 생각을 키워주거든'을 고르세요.",
-    answers: [
-      "I think reading is useful because it grows your mind.",
-      "I think reading is useful so it grows your mind.",
-      "I think reading useful because grows your mind.",
-    ],
-    correct: 0,
-  },
-];
-
-const curriculumSeeds = {
-  starter: [
-    ["Hello world", "인사하고 나를 소개하기", "Hi, I am Mina. I am eleven."],
-    ["Feelings", "기분과 이유 말하기", "I am happy because it is Friday."],
-    ["My favorites", "좋아하는 것과 이유 말하기", "I like games because they are fun."],
-    ["School things", "물건 묻고 설명하기", "It is my notebook. It is blue."],
-    ["My family", "가족 소개하고 묻기", "This is my brother. He is twelve."],
-    ["At the cafe", "예의 있게 주문하기", "Can I have some orange juice, please?"],
-    ["Free talk", "배운 표현으로 자유롭게 말하기", "Let me tell you about my day."],
-  ],
-  a1: [
-    ["My day", "하루 일과를 순서대로 말하기", "First I get up, then I eat breakfast."],
-    ["At school", "수업과 과목 이야기하기", "My favorite subject is science."],
-    ["Food talk", "음식 취향을 이유와 함께 말하기", "I like pasta because it is delicious."],
-    ["Weekend plan", "주말 계획 말하기", "This weekend, I am going to ride my bike."],
-    ["Directions", "위치와 길 안내하기", "Go straight and turn left at the bank."],
-    ["Can you?", "할 수 있는 것과 못하는 것 말하기", "I can swim, but I can't ski yet."],
-    ["Interview day", "질문을 이어서 주고받기", "What do you usually do after school?"],
-  ],
-  a1plus: [
-    ["Story time", "어제 한 일을 이야기로 말하기", "Yesterday I watched a movie and ate popcorn."],
-    ["Tell me why", "좋아하는 이유를 자세히 설명하기", "I love it because it makes me feel excited."],
-    ["Compare it", "두 가지를 비교해 말하기", "I think math is harder than art."],
-    ["Problem solving", "문제 상황에서 도움 요청하기", "Excuse me, could you help me with this?"],
-    ["My opinion", "의견을 근거와 함께 말하기", "I think reading is useful because it grows your mind."],
-    ["Role play", "가게·학교 상황극 하기", "How much is this? Do you have a smaller one?"],
-    ["Show and tell", "내 물건을 자세히 소개하기", "This is special to me because my grandma gave it to me."],
-  ],
-};
-
-const dialogues = {
-  starter: [
-    [
-      ["Coach", "Hi there! What is your name?", "안녕! 이름이 뭐니?"],
-      ["You", "Hi, I am Minjun. Nice to meet you.", "안녕, 나는 민준이야. 만나서 반가워."],
-      ["Coach", "Nice to meet you too! How old are you?", "나도 반가워! 몇 살이니?"],
-      ["You", "I am eleven years old.", "나는 열한 살이야."],
-      ["Coach", "Cool! Let's be good friends.", "멋지다! 우리 좋은 친구가 되자."],
-    ],
-    [
-      ["Coach", "How are you today?", "오늘 기분이 어때?"],
-      ["You", "I am happy because it is Friday.", "금요일이라서 행복해."],
-      ["Coach", "Nice! Why do you like Friday?", "좋아! 왜 금요일을 좋아해?"],
-      ["You", "Because I can play after school.", "방과 후에 놀 수 있으니까."],
-      ["Coach", "That sounds fun! Have a great day.", "재미있겠다! 좋은 하루 보내."],
-    ],
-    [
-      ["Coach", "What do you like to do?", "뭘 하는 걸 좋아해?"],
-      ["You", "I like games because they are fun.", "게임이 재미있어서 좋아해."],
-      ["Coach", "Which game do you like the most?", "어떤 게임을 가장 좋아해?"],
-      ["You", "I like soccer games the most.", "축구 게임을 제일 좋아해."],
-      ["Coach", "Awesome! Let's play together someday.", "멋져! 언젠가 같이 하자."],
-    ],
-    [
-      ["Coach", "What is in your bag?", "가방에 뭐가 있어?"],
-      ["You", "It is my notebook. It is blue.", "내 공책이야. 파란색이야."],
-      ["Coach", "Nice! What else do you have?", "좋네! 또 뭐가 있어?"],
-      ["You", "I have a pencil and an eraser.", "연필이랑 지우개가 있어."],
-      ["Coach", "You are ready for class!", "수업 준비가 다 됐네!"],
-    ],
-    [
-      ["Coach", "Tell me about your family.", "가족을 소개해줘."],
-      ["You", "This is my brother. He is twelve.", "이쪽은 내 형이야. 열두 살이야."],
-      ["Coach", "Do you have any pets?", "반려동물이 있어?"],
-      ["You", "Yes, I have a small dog.", "응, 작은 강아지가 있어."],
-      ["Coach", "So cute! I love dogs too.", "귀엽다! 나도 강아지 좋아해."],
-    ],
-    [
-      ["Coach", "Welcome! What would you like?", "어서 와! 뭘 줄까?"],
-      ["You", "Can I have some orange juice, please?", "오렌지 주스 좀 주실래요?"],
-      ["Coach", "Sure! Anything else?", "물론이지! 더 필요한 거 있어?"],
-      ["You", "No, thank you. That's all.", "아니요, 괜찮아요. 그게 다예요."],
-      ["Coach", "Here you go. Enjoy!", "여기 있어. 맛있게 먹어!"],
-    ],
-    [
-      ["Coach", "Let's talk freely! How was your day?", "자유롭게 얘기하자! 오늘 어땠어?"],
-      ["You", "Let me tell you about my day.", "내 하루를 얘기해줄게."],
-      ["Coach", "I'm listening. What did you do?", "듣고 있어. 뭐 했어?"],
-      ["You", "I studied English and played outside.", "영어 공부하고 밖에서 놀았어."],
-      ["Coach", "Great job today! You did well.", "오늘 잘했어! 정말 잘했어."],
-    ],
-  ],
-  a1: [
-    [
-      ["Coach", "What is your morning like?", "아침은 어떻게 보내?"],
-      ["You", "First I get up, then I eat breakfast.", "먼저 일어나고, 그다음 아침을 먹어."],
-      ["Coach", "What do you eat for breakfast?", "아침으로 뭘 먹어?"],
-      ["You", "I usually eat rice and eggs.", "보통 밥이랑 계란을 먹어."],
-      ["Coach", "Healthy! Then what do you do?", "건강하네! 그다음엔 뭐 해?"],
-      ["You", "I brush my teeth and go to school.", "이를 닦고 학교에 가."],
-    ],
-    [
-      ["Coach", "What is your favorite subject?", "가장 좋아하는 과목이 뭐야?"],
-      ["You", "My favorite subject is science.", "내가 제일 좋아하는 과목은 과학이야."],
-      ["Coach", "Why do you like science?", "과학을 왜 좋아해?"],
-      ["You", "Because we do fun experiments.", "재미있는 실험을 해서 좋아해."],
-      ["Coach", "That sounds exciting!", "신나겠다!"],
-    ],
-    [
-      ["Coach", "What food do you like?", "어떤 음식을 좋아해?"],
-      ["You", "I like pasta because it is delicious.", "파스타가 맛있어서 좋아해."],
-      ["Coach", "Can you cook it yourself?", "직접 요리할 수 있어?"],
-      ["You", "Not yet, but I want to learn.", "아직은 못 하지만 배우고 싶어."],
-      ["Coach", "I'm sure you can do it!", "넌 분명 할 수 있어!"],
-    ],
-    [
-      ["Coach", "Do you have any weekend plans?", "주말 계획 있어?"],
-      ["You", "This weekend, I am going to ride my bike.", "이번 주말에 자전거를 탈 거야."],
-      ["Coach", "Where will you ride?", "어디서 탈 거야?"],
-      ["You", "I will ride in the park near my house.", "집 근처 공원에서 탈 거야."],
-      ["Coach", "Have fun and be safe!", "재미있게, 그리고 조심히 타!"],
-    ],
-    [
-      ["Coach", "Excuse me, where is the library?", "실례합니다, 도서관이 어디예요?"],
-      ["You", "Go straight and turn left at the bank.", "직진하다가 은행에서 왼쪽으로 도세요."],
-      ["Coach", "Is it far from here?", "여기서 멀어요?"],
-      ["You", "No, it is only five minutes away.", "아니요, 5분밖에 안 걸려요."],
-      ["Coach", "Thank you so much!", "정말 고마워요!"],
-    ],
-    [
-      ["Coach", "What can you do well?", "뭘 잘할 수 있어?"],
-      ["You", "I can swim, but I can't ski yet.", "수영은 할 수 있지만 스키는 아직 못 타."],
-      ["Coach", "How did you learn to swim?", "수영은 어떻게 배웠어?"],
-      ["You", "My dad taught me last summer.", "지난여름에 아빠가 가르쳐주셨어."],
-      ["Coach", "That's a great memory!", "좋은 추억이네!"],
-    ],
-    [
-      ["Coach", "What do you usually do after school?", "방과 후에 보통 뭐 해?"],
-      ["You", "I usually do my homework first.", "보통 숙제를 먼저 해."],
-      ["Coach", "And after your homework?", "숙제 끝나고는?"],
-      ["You", "Then I play with my friends.", "그다음엔 친구들이랑 놀아."],
-      ["Coach", "Nice balance! Keep it up.", "균형이 좋네! 계속 그렇게 해."],
-    ],
-  ],
-  a1plus: [
-    [
-      ["Coach", "What did you do yesterday?", "어제 뭐 했어?"],
-      ["You", "Yesterday I watched a movie and ate popcorn.", "어제 영화를 보고 팝콘을 먹었어."],
-      ["Coach", "What kind of movie was it?", "어떤 영화였어?"],
-      ["You", "It was an action movie. It was exciting.", "액션 영화였어. 신났어."],
-      ["Coach", "Would you recommend it to me?", "나한테 추천할 만해?"],
-      ["You", "Yes, you should watch it. You will love it.", "응, 꼭 봐. 분명 좋아할 거야."],
-    ],
-    [
-      ["Coach", "Why do you love your hobby?", "취미를 왜 좋아해?"],
-      ["You", "I love it because it makes me feel excited.", "신나게 해줘서 좋아해."],
-      ["Coach", "When did you start it?", "언제 시작했어?"],
-      ["You", "I started two years ago.", "2년 전에 시작했어."],
-      ["Coach", "You must be really good now!", "이제 정말 잘하겠다!"],
-    ],
-    [
-      ["Coach", "Which is harder, math or art?", "수학과 미술 중 뭐가 더 어려워?"],
-      ["You", "I think math is harder than art.", "수학이 미술보다 더 어려운 것 같아."],
-      ["Coach", "Why do you think so?", "왜 그렇게 생각해?"],
-      ["You", "Because math has many rules to remember.", "수학은 외울 규칙이 많아서."],
-      ["Coach", "That's a thoughtful answer.", "생각이 깊은 대답이야."],
-    ],
-    [
-      ["Coach", "You look stuck. What's wrong?", "막힌 것 같네. 무슨 일이야?"],
-      ["You", "Excuse me, could you help me with this?", "실례지만, 이것 좀 도와주실 수 있어요?"],
-      ["Coach", "Of course. What's the problem?", "물론이지. 뭐가 문제야?"],
-      ["You", "I don't understand this question.", "이 문제가 이해가 안 돼."],
-      ["Coach", "Let's solve it together, step by step.", "같이 차근차근 풀어보자."],
-    ],
-    [
-      ["Coach", "Do you think reading is important?", "독서가 중요하다고 생각해?"],
-      ["You", "I think reading is useful because it grows your mind.", "독서는 생각을 키워줘서 유용하다고 생각해."],
-      ["Coach", "What do you like to read?", "어떤 걸 읽는 걸 좋아해?"],
-      ["You", "I enjoy adventure stories the most.", "모험 이야기를 가장 좋아해."],
-      ["Coach", "Great choice! Reading is powerful.", "좋은 선택이야! 독서는 힘이 세."],
-    ],
-    [
-      ["Coach", "Hello! Can I help you?", "안녕하세요! 도와드릴까요?"],
-      ["You", "How much is this? Do you have a smaller one?", "이거 얼마예요? 더 작은 것도 있어요?"],
-      ["Coach", "It is ten dollars. Yes, we have one.", "10달러예요. 네, 있어요."],
-      ["You", "Great. I will take the smaller one.", "좋아요. 작은 걸로 살게요."],
-      ["Coach", "Good choice! Here you are.", "좋은 선택이에요! 여기 있어요."],
-    ],
-    [
-      ["Coach", "Tell me about something special to you.", "너에게 특별한 것을 얘기해줘."],
-      ["You", "This is special to me because my grandma gave it to me.", "할머니가 주셔서 나에게 특별해."],
-      ["Coach", "What is it exactly?", "정확히 뭐야?"],
-      ["You", "It is an old watch from my grandma.", "할머니가 주신 오래된 시계야."],
-      ["Coach", "What a wonderful gift!", "정말 멋진 선물이네!"],
-    ],
-  ],
-};
-
-const phraseBank = {
-  starter: [
-    ["Nice to meet you.", "만나서 반가워."],
-    ["I am happy because it is Friday.", "금요일이라서 행복해."],
-    ["I like games because they are fun.", "게임이 재미있어서 좋아해."],
-    ["Can I have some juice, please?", "주스 좀 주실래요?"],
-    ["This is my brother.", "이쪽은 내 형이야."],
-  ],
-  a1: [
-    ["First I get up, then I eat breakfast.", "먼저 일어나고, 그다음 아침을 먹어."],
-    ["My favorite subject is science.", "내가 제일 좋아하는 과목은 과학이야."],
-    ["I like pasta because it is delicious.", "파스타가 맛있어서 좋아해."],
-    ["Go straight and turn left.", "직진하다가 왼쪽으로 도세요."],
-    ["I can swim, but I can't ski yet.", "수영은 하지만 스키는 아직 못 타."],
-  ],
-  a1plus: [
-    ["I think reading is useful.", "독서가 유용하다고 생각해."],
-    ["It makes me feel excited.", "그건 나를 신나게 해."],
-    ["Math is harder than art.", "수학이 미술보다 더 어려워."],
-    ["Could you help me with this?", "이것 좀 도와주실 수 있어요?"],
-    ["You should watch it. You will love it.", "꼭 봐. 분명 좋아할 거야."],
-  ],
-};
-
-// 렛츠톡식 대화 미션: AI대화에서 이 표현들을 직접 말하면 미션 성공
-const talkMissions = {
-  starter: [
-    { en: "Nice to meet you.", ko: "만나서 반가워.", keywords: ["nice", "meet"] },
-    { en: "I like ___ because ___.", ko: "나는 ~해서 ~를 좋아해.", keywords: ["like", "because"] },
-    { en: "Can I have ___, please?", ko: "~ 좀 주실래요?", keywords: ["can", "have"] },
-    { en: "I am happy today.", ko: "오늘 행복해.", keywords: ["happy"] },
-    { en: "What do you like?", ko: "너는 뭘 좋아해?", keywords: ["what", "like"] },
-    { en: "This is my friend.", ko: "이쪽은 내 친구야.", keywords: ["this", "is"] },
-  ],
-  a1: [
-    { en: "My favorite ___ is ___.", ko: "내가 제일 좋아하는 ~는 ~야.", keywords: ["favorite"] },
-    { en: "I usually ___ after school.", ko: "방과 후에 보통 ~해.", keywords: ["usually"] },
-    { en: "I like it because ___.", ko: "~해서 좋아해.", keywords: ["because"] },
-    { en: "This weekend, I am going to ___.", ko: "이번 주말에 ~할 거야.", keywords: ["going", "to"] },
-    { en: "I can ___, but I can't ___.", ko: "~는 할 수 있지만 ~는 못 해.", keywords: ["can", "can't"] },
-    { en: "What do you usually do?", ko: "너는 보통 뭐 해?", keywords: ["what", "usually"] },
-  ],
-  a1plus: [
-    { en: "I think ___ because ___.", ko: "나는 ~해서 ~라고 생각해.", keywords: ["think", "because"] },
-    { en: "Yesterday I ___.", ko: "어제 나는 ~했어.", keywords: ["yesterday"] },
-    { en: "___ is harder than ___.", ko: "~가 ~보다 더 어려워.", keywords: ["harder", "than"] },
-    { en: "Could you help me with this?", ko: "이것 좀 도와주실 수 있어요?", keywords: ["could", "help"] },
-    { en: "You should ___. You will love it.", ko: "~해봐. 분명 좋아할 거야.", keywords: ["should"] },
-    { en: "In my opinion, ___.", ko: "내 생각에는 ~야.", keywords: ["opinion"] },
-  ],
-};
-
-const suggestedPrompts = {
-  starter: [
-    "Hi! I am Minjun.",
-    "I like music.",
-    "How are you today?",
-    "What is your favorite color?",
-  ],
-  a1: [
-    "I play soccer after school.",
-    "What do you do on weekends?",
-    "I like pizza because it is tasty.",
-    "Can we talk about school?",
-  ],
-  a1plus: [
-    "Yesterday, I watched a movie with my family.",
-    "I think books are better for bedtime.",
-    "Can you ask me three questions?",
-    "I want to talk about my weekend plan.",
-  ],
-};
-
-const chatCharacters = {
-  sunny: {
-    name: "Sunny",
-    emoji: "🐰",
-    ko: "명랑 토끼",
-    persona:
-      "Your character: Sunny, a cheerful bunny friend. You are playful and full of energy, cheer loudly for every try, and sometimes add a cute action like *hop hop*.",
-    rate: 0.9,
-    pitch: 1.22,
-    geminiVoice: "Zephyr",
-    openaiVoice: "coral",
-  },
-  max: {
-    name: "Max",
-    emoji: "🤖",
-    ko: "척척 로봇",
-    persona:
-      "Your character: Max, a kind robot tutor. You speak slowly and clearly, love numbers and facts, and sometimes say 'Beep!' when the student does well.",
-    rate: 0.78,
-    pitch: 0.92,
-    geminiVoice: "Charon",
-    openaiVoice: "onyx",
-  },
-  coco: {
-    name: "Coco",
-    emoji: "🐱",
-    ko: "호기심 고양이",
-    persona:
-      "Your character: Coco, a curious cat. You are full of questions, get excited about small details, and sometimes add a soft 'Meow!'.",
-    rate: 0.86,
-    pitch: 1.1,
-    geminiVoice: "Aoede",
-    openaiVoice: "nova",
-  },
-};
-
-const yearlyRoadmap = [
-  {
-    version: "v1",
-    month: "Month 1",
-    title: "말문 열기",
-    focus: "인사, 감정, 좋아하는 것, 학교 물건",
-    unlock: "기초 문장 20개를 듣고 따라 말한 뒤 v2 요청",
-  },
-  {
-    version: "v2",
-    month: "Month 2",
-    title: "My World",
-    focus: "가족, 친구, 학교생활, 취미 소개",
-    unlock: "v1 표현 복습 후 자기소개 1분 말하기",
-  },
-  {
-    version: "v3",
-    month: "Month 3",
-    title: "Daily Conversation",
-    focus: "카페, 가게, 교실, 도움 요청 역할극",
-    unlock: "v2 자기소개 문장 재사용 후 상황극 진입",
-  },
-  {
-    version: "v4",
-    month: "Month 4",
-    title: "Story Speaking",
-    focus: "어제 한 일, 주말 이야기, 순서 말하기",
-    unlock: "과거형 핵심 표현 복습 후 짧은 이야기 만들기",
-  },
-  {
-    version: "v5",
-    month: "Month 5",
-    title: "Opinion English",
-    focus: "I think, because, agree, better than",
-    unlock: "좋아하는 이유 말하기 복습 후 의견 말하기",
-  },
-  {
-    version: "v6",
-    month: "Month 6",
-    title: "Mission English",
-    focus: "영어로 미션 해결, 초대, 주문, 계획하기",
-    unlock: "역할극 표현 복습 후 미션 성공 배지",
-  },
-  {
-    version: "v7",
-    month: "Month 7",
-    title: "Travel Starter",
-    focus: "공항, 호텔, 길 묻기, 여행 물건",
-    unlock: "도움 요청 표현 복습 후 여행 역할극",
-  },
-  {
-    version: "v8",
-    month: "Month 8",
-    title: "School Project",
-    focus: "발표, 그림 설명, 간단한 조사 결과 말하기",
-    unlock: "내 물건 소개 복습 후 90초 발표",
-  },
-  {
-    version: "v9",
-    month: "Month 9",
-    title: "Story Maker",
-    focus: "캐릭터, 문제, 해결, 결말 만들기",
-    unlock: "과거형과 순서 표현 복습 후 이야기 완성",
-  },
-  {
-    version: "v10",
-    month: "Month 10",
-    title: "Culture Talk",
-    focus: "음식, 명절, 놀이, 나라 비교",
-    unlock: "비교 표현 복습 후 한국 문화 소개",
-  },
-  {
-    version: "v11",
-    month: "Month 11",
-    title: "Confidence Chat",
-    focus: "3분 자유대화, 되묻기, 고쳐 말하기",
-    unlock: "약한 표현 자동 복습 후 자유대화",
-  },
-  {
-    version: "v12",
-    month: "Month 12",
-    title: "My English Show",
-    focus: "1년 포트폴리오, 최종 인터뷰, 발표 녹음",
-    unlock: "v1~v11 핵심 문장 복습 후 최종 쇼케이스",
-  },
-];
-
-// ---- 프로필 (로그인 없는 사용자 전환) ----
-// 한 기기를 여러 아이가 같이 써도 학습 기록이 섞이지 않도록
-// 프로필별로 localStorage 키를 분리한다. 서버/계정은 필요 없다.
-
-const PROFILES_KEY = "kidEnglish.profiles";
-const ACTIVE_PROFILE_KEY = "kidEnglish.activeProfile";
-const PROFILE_EMOJIS = ["🦊", "🐻", "🐯", "🐸", "🐥", "🦄", "🐬", "🦁"];
-
-function ensureProfiles() {
-  let profiles = [];
-  try {
-    profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
-  } catch {
-    profiles = [];
-  }
-  if (!profiles.length) {
-    // 첫 프로필 "나"는 기존(접두사 없는) 데이터를 그대로 이어받는다
-    profiles = [{ id: "me", name: "나", emoji: "🙂" }];
-    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
-    localStorage.setItem(ACTIVE_PROFILE_KEY, "me");
-  }
-  return profiles;
-}
-
-function activeProfileId() {
-  return localStorage.getItem(ACTIVE_PROFILE_KEY) || "me";
-}
-
-function currentProfile() {
-  const profiles = ensureProfiles();
-  return profiles.find((profile) => profile.id === activeProfileId()) || profiles[0];
-}
-
-function storageKey(name) {
-  const id = activeProfileId();
-  return id === "me" ? `kidEnglish.${name}` : `kidEnglish.${id}.${name}`;
-}
-
-function storeGet(name) {
-  return localStorage.getItem(storageKey(name));
-}
-
-function storeSet(name, value) {
-  localStorage.setItem(storageKey(name), value);
-}
-
-function storeRemove(name) {
-  localStorage.removeItem(storageKey(name));
-}
+import {
+  LEVELS,
+  APP_VERSION,
+  quiz,
+  curriculumSeeds,
+  dialogues,
+  phraseBank,
+  suggestedPrompts,
+  chatCharacters,
+  talkMissions,
+  yearlyRoadmap,
+} from "./modules/data.js";
+import { $, $$ } from "./modules/dom.js";
+import {
+  PROFILES_KEY,
+  ACTIVE_PROFILE_KEY,
+  PROFILE_EMOJIS,
+  ensureProfiles,
+  activeProfileId,
+  currentProfile,
+  storeGet,
+  storeSet,
+  storeRemove,
+} from "./modules/profiles.js";
+import { applyHybridProgress, dateStamp } from "./modules/progress.js";
 
 ensureProfiles();
+
+function readArray(name) {
+  try {
+    const value = JSON.parse(storeGet(name) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
 
 const state = {
   level: storeGet("level") || "",
@@ -543,10 +52,10 @@ const state = {
   aiKey: localStorage.getItem("kidEnglish.aiKey") || "",
   chatCharacter: storeGet("chatCharacter") || "sunny",
   voiceName: localStorage.getItem("kidEnglish.voiceName") || "",
-  chatMessages: JSON.parse(storeGet("chatMessages") || "[]"),
+  chatMessages: readArray("chatMessages"),
   lastAiReply: storeGet("lastAiReply") || "",
-  weakPhrases: JSON.parse(storeGet("weakPhrases") || "[]"),
-  bossCleared: JSON.parse(storeGet("bossCleared") || "[]"),
+  weakPhrases: readArray("weakPhrases"),
+  bossCleared: readArray("bossCleared"),
   bossKey: "",
   bossTargets: [],
   bossPassed: [],
@@ -555,9 +64,6 @@ const state = {
   talkMissionDone: [],
 };
 state.viewDay = state.progressDay;
-
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 function saveState() {
   storeSet("level", state.level);
@@ -575,28 +81,6 @@ function saveState() {
   storeSet("lastAiReply", state.lastAiReply);
   storeSet("weakPhrases", JSON.stringify(state.weakPhrases.slice(0, 12)));
   storeSet("bossCleared", JSON.stringify(state.bossCleared));
-}
-
-function dateStamp(offsetDays = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function applyHybridProgress() {
-  const completedOnPreviousDate = state.lastCompletedDate && state.lastCompletedDate !== dateStamp();
-  const currentDayWasCompleted = state.lastCompletedDay === state.progressDay;
-  if (!state.versionComplete && completedOnPreviousDate && currentDayWasCompleted) {
-    if (state.progressDay < APP_VERSION.days) {
-      state.progressDay += 1;
-    } else {
-      state.versionComplete = true;
-    }
-    state.viewDay = state.progressDay;
-    saveState();
-  }
 }
 
 function activeLevel() {
@@ -2177,7 +1661,7 @@ if ("serviceWorker" in navigator) {
 }
 
 window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
-applyHybridProgress();
+applyHybridProgress(state, APP_VERSION, saveState);
 bindEvents();
 renderProfileGate();
 updateProfileSwitch();

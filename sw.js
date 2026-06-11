@@ -1,9 +1,13 @@
-const CACHE_NAME = "kid-english-v2";
+const CACHE_NAME = "kid-english-v3";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./modules/data.js",
+  "./modules/dom.js",
+  "./modules/profiles.js",
+  "./modules/progress.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
