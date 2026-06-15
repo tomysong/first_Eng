@@ -27,6 +27,10 @@ export function openaiChatUrl() {
   return `${GEMINI_PROXY}/openai/v1/chat/completions`;
 }
 
+export function openaiTranscribeUrl() {
+  return `${GEMINI_PROXY}/openai/v1/audio/transcriptions`;
+}
+
 export function cloudTtsReady() {
   return Boolean(GEMINI_PROXY);
 }

@@ -1,6 +1,7 @@
 import { state, saveState, activeLevel } from "./store.js";
 import { openaiChatUrl, cloudTtsReady } from "./api.js";
 import { speak, clearTtsCache, renderVoiceOptions } from "./tts.js";
+import { sttSupported, isRecording, startRecording, stopRecording, transcribe } from "./stt.js";
 import { chatCharacters, talkMissions, suggestedPrompts, LEVELS } from "./data.js";
 import { $, $$ } from "./dom.js";
 
@@ -300,21 +301,46 @@ export function suggestChatPrompt() {
   $("#chatInput").focus();
 }
 
-export function startAiRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    pushChat("system", "이 브라우저에서는 말 입력이 제한될 수 있어요. 문장을 직접 입력해보세요.");
+export async function startAiRecognition() {
+  if (!sttSupported()) {
+    pushChat("system", "이 브라우저에서는 말 입력이 안 돼요. 문장을 직접 입력해보세요.");
     return;
   }
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.start();
-  recognition.onresult = (event) => {
-    $("#chatInput").value = event.results[0][0].transcript;
-  };
-  recognition.onerror = () => {
-    pushChat("system", "마이크 권한을 확인하고 다시 시도해주세요.");
-  };
+  const btn = $("#aiMicBtn");
+
+  // 녹음 중이면: 멈추고 Whisper로 글자 변환
+  if (isRecording()) {
+    const blob = await stopRecording();
+    if (btn) btn.textContent = "말로 입력";
+    if (!blob) return;
+
+    const loading = document.createElement("div");
+    loading.className = "chat-bubble system";
+    loading.innerHTML = "<strong>Note</strong><p>🎧 말을 글자로 바꾸는 중...</p>";
+    $("#chatLog").appendChild(loading);
+    $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
+
+    try {
+      const text = await transcribe(blob);
+      loading.remove();
+      if (text) {
+        $("#chatInput").value = text;
+        $("#chatInput").focus();
+      } else {
+        pushChat("system", "잘 안 들렸어요. 다시 한 번 말해볼까요?");
+      }
+    } catch {
+      loading.remove();
+      pushChat("system", "음성 변환에 실패했어요. 잠시 후 다시 시도해주세요.");
+    }
+    return;
+  }
+
+  // 녹음 시작
+  try {
+    await startRecording();
+    if (btn) btn.textContent = "🔴 멈추기";
+  } catch {
+    pushChat("system", "마이크 권한을 허용해주세요.");
+  }
 }

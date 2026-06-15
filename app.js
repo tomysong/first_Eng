@@ -19,6 +19,7 @@ import {
   storeRemove,
 } from "./modules/profiles.js";
 import { applyHybridProgress, dateStamp } from "./modules/progress.js";
+import { sttSupported, isRecording, startRecording, stopRecording, transcribe } from "./modules/stt.js";
 import { state, saveState, activeLevel } from "./modules/store.js";
 import { GEMINI_PROXY } from "./modules/api.js";
 import { renderGarden } from "./modules/garden.js";
@@ -511,43 +512,54 @@ function speakNextSentence() {
   speak(line, 0.78);
 }
 
-function startRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+async function startRecognition() {
   const target = dialogueTarget();
 
-  if (!SpeechRecognition) {
-    $("#coachLine").textContent = `마이크 인식은 이 브라우저에서 제한될 수 있어요. 대신 "${target}"를 크게 따라 말해보세요.`;
+  if (!sttSupported()) {
+    $("#coachLine").textContent = `이 브라우저에서는 녹음이 안 돼요. 대신 "${target}"를 크게 따라 말해보세요.`;
     speak(target, 0.76);
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  $("#coachLine").textContent = `"${target}"를 말해보세요.`;
-  recognition.start();
+  // 녹음 중이면: 멈추고 Whisper로 전사한 뒤 발음 채점
+  if (isRecording()) {
+    const blob = await stopRecording();
+    $("#recordBtn").textContent = "말하기";
+    if (!blob) return;
+    $("#coachLine").textContent = "🎧 듣고 있어요...";
+    try {
+      const transcript = await transcribe(blob);
+      if (!transcript) {
+        $("#coachLine").textContent = "잘 안 들렸어요. 다시 한 번 말해볼까요?";
+        return;
+      }
+      const score = compareSpeech(target, transcript);
+      renderWordFeedback(target, transcript);
+      recordSpeechScore(target, score);
 
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    const score = compareSpeech(target, transcript);
-    renderWordFeedback(target, transcript);
-    recordSpeechScore(target, score);
-
-    const { day } = getLesson();
-    if (day.boss) {
-      handleBossAttempt(target, score, day);
-      return;
+      const { day } = getLesson();
+      if (day.boss) {
+        handleBossAttempt(target, score, day);
+        return;
+      }
+      $("#coachLine").textContent =
+        score > 0.7
+          ? "좋아요. 핵심 단어가 잘 들렸어요."
+          : "괜찮아요. 회색 단어를 살려서 한 번 더! 이 문장은 표현 카드에 복습으로 담아둘게요.";
+    } catch {
+      $("#coachLine").textContent = "음성 변환에 실패했어요. 잠시 후 다시 눌러주세요.";
     }
-    $("#coachLine").textContent =
-      score > 0.7
-        ? "좋아요. 핵심 단어가 잘 들렸어요."
-        : "괜찮아요. 회색 단어를 살려서 한 번 더! 이 문장은 표현 카드에 복습으로 담아둘게요.";
-  };
+    return;
+  }
 
-  recognition.onerror = () => {
-    $("#coachLine").textContent = "마이크 권한을 확인하고 다시 눌러주세요.";
-  };
+  // 녹음 시작
+  try {
+    await startRecording();
+    $("#recordBtn").textContent = "🔴 멈추기";
+    $("#coachLine").textContent = `"${target}"를 말한 뒤, 버튼을 다시 누르세요.`;
+  } catch {
+    $("#coachLine").textContent = "마이크 권한을 허용해주세요.";
+  }
 }
 
 function handleBossAttempt(target, score, day) {

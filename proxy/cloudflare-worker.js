@@ -23,6 +23,9 @@ const OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech";
 const OPENAI_TTS_PATH = "/openai/v1/audio/speech";
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_CHAT_PATH = "/openai/v1/chat/completions";
+const OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
+const OPENAI_TRANSCRIBE_PATH = "/openai/v1/audio/transcriptions";
+const MAX_AUDIO_BYTES = 6_000_000; // 음성 녹음 업로드 한도(약 6MB)
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 const RATE_LIMIT_BLOCK_SECONDS = 600;
@@ -197,7 +200,8 @@ export default {
     const isGemini = /^\/v1beta\/models\/[^/]+:generateContent$/.test(url.pathname);
     const isOpenAiTts = url.pathname === OPENAI_TTS_PATH;
     const isOpenAiChat = url.pathname === OPENAI_CHAT_PATH;
-    if (!isGemini && !isOpenAiTts && !isOpenAiChat) {
+    const isOpenAiTranscribe = url.pathname === OPENAI_TRANSCRIBE_PATH;
+    if (!isGemini && !isOpenAiTts && !isOpenAiChat && !isOpenAiTranscribe) {
       return new Response("Not Found", { status: 404, headers: cors });
     }
     const apiKey = isGemini ? readKey(env) : readOpenAiKey(env);
@@ -206,6 +210,41 @@ export default {
         status: 500,
         headers: cors,
       });
+    }
+
+    // Whisper 전사: 오디오(multipart)는 바이너리 그대로 전달한다.
+    if (isOpenAiTranscribe) {
+      const audioLength = Number(request.headers.get("Content-Length") || 0);
+      if (audioLength > MAX_AUDIO_BYTES) {
+        return jsonResponse({ error: "Audio too large", limitBytes: MAX_AUDIO_BYTES }, 413, cors);
+      }
+      const audioLimit = await applyRateLimit(request, env);
+      if (!audioLimit.allowed) {
+        return jsonResponse(
+          { error: "Too many requests", retryAfterSeconds: audioLimit.retryAfter },
+          429,
+          cors,
+          rateLimitHeaders(audioLimit)
+        );
+      }
+      const audioBody = await request.arrayBuffer();
+      if (audioBody.byteLength > MAX_AUDIO_BYTES) {
+        return jsonResponse({ error: "Audio too large", limitBytes: MAX_AUDIO_BYTES }, 413, cors);
+      }
+      const sttUpstream = await fetch(OPENAI_TRANSCRIBE_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": request.headers.get("Content-Type") || "application/octet-stream",
+        },
+        body: audioBody,
+      });
+      const sttHeaders = new Headers(cors);
+      sttHeaders.set("Content-Type", sttUpstream.headers.get("Content-Type") || "application/json");
+      for (const [key, value] of Object.entries(rateLimitHeaders(audioLimit))) {
+        sttHeaders.set(key, value);
+      }
+      return new Response(sttUpstream.body, { status: sttUpstream.status, headers: sttHeaders });
     }
 
     const contentLength = Number(request.headers.get("Content-Length") || 0);
