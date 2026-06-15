@@ -23,6 +23,10 @@ export function openaiTtsUrl() {
   return `${GEMINI_PROXY}/openai/v1/audio/speech`;
 }
 
+export function openaiChatUrl() {
+  return `${GEMINI_PROXY}/openai/v1/chat/completions`;
+}
+
 export function cloudTtsReady() {
   return Boolean(GEMINI_PROXY);
 }

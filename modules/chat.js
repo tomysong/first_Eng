@@ -1,6 +1,6 @@
 import { state, saveState, activeLevel } from "./store.js";
-import { effectiveProvider, geminiUrl, geminiHeaders, geminiReady } from "./api.js";
-import { speak, characterCloudVoice, clearTtsCache, renderVoiceOptions } from "./tts.js";
+import { openaiChatUrl, cloudTtsReady } from "./api.js";
+import { speak, clearTtsCache, renderVoiceOptions } from "./tts.js";
 import { chatCharacters, talkMissions, suggestedPrompts, LEVELS } from "./data.js";
 import { $, $$ } from "./dom.js";
 
@@ -45,8 +45,7 @@ export function renderTalkMissions() {
     item.querySelector("strong").textContent = mission.en;
     item.querySelector(".mission-text span").textContent = mission.ko;
     item.addEventListener("click", () => {
-      const character = activeCharacter();
-      speak(mission.en.replace(/_+/g, "something"), character.rate, character.pitch, characterCloudVoice(character));
+      speak(mission.en.replace(/_+/g, "something"));
     });
     list.appendChild(item);
   });
@@ -197,16 +196,9 @@ export async function sendAiMessage(text) {
   addChatBubble("system", "AI가 짧고 쉬운 영어 답변을 준비하고 있어요...");
 
   try {
-    const provider = effectiveProvider();
-    const reply =
-      provider === "gemini"
-        ? await callGemini(cleanText)
-        : provider === "openai"
-          ? await callOpenAI(cleanText)
-          : makeLocalReply(cleanText);
+    const reply = await callOpenAiChat(cleanText);
     pushChat("ai", reply);
-    const character = activeCharacter();
-    speak(extractEnglishForSpeech(reply), character.rate, character.pitch, characterCloudVoice(character));
+    speak(extractEnglishForSpeech(reply));
   } catch (error) {
     pushChat(
       "system",
@@ -217,95 +209,38 @@ export async function sendAiMessage(text) {
   }
 }
 
-async function callGemini(text) {
-  if (!geminiReady()) return makeLocalReply(text);
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: getCoachPrompt() }] },
-    contents: buildGeminiHistory(text),
-    generationConfig: {
-      temperature: 0.7,
-      // thinking 토큰이 출력 한도에 합산되어 빈 응답이 오는 것을 방지
-      maxOutputTokens: 400,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  });
-
-  // Gemini가 일시적으로 바쁠 때(503/UNAVAILABLE)는 잠깐 쉬고 다시 시도
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetch(geminiUrl("gemini-3.5-flash"), {
-      method: "POST",
-      headers: geminiHeaders(),
-      body,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (response.ok) {
-      return (
-        data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("\n").trim() ||
-        makeLocalReply(text)
-      );
-    }
-    const busy = response.status === 503 || data.error?.status === "UNAVAILABLE";
-    if (busy && attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
-      continue;
-    }
-    throw new Error(data.error?.message || "Gemini API 오류");
-  }
-  return makeLocalReply(text);
-}
-
-function buildGeminiHistory(text) {
-  const recent = state.chatMessages
-    .filter((message) => message.role !== "system")
-    .slice(0, -1)
-    .slice(-8)
-    .map((message) => ({
-      role: message.role === "user" ? "user" : "model",
-      parts: [{ text: message.text }],
-    }));
-  recent.push({ role: "user", parts: [{ text }] });
-  return recent;
-}
-
-async function callOpenAI(text) {
-  if (!state.aiKey) return makeLocalReply(text);
-  const response = await fetch("https://api.openai.com/v1/responses", {
+// 대화 생성은 OpenAI(gpt-4o-mini)로 한다. 빠르고 안정적이며 키는 Worker에만 있다.
+async function callOpenAiChat(text) {
+  if (!cloudTtsReady()) return makeLocalReply(text);
+  const response = await fetch(openaiChatUrl(), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${state.aiKey}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-5.4-mini",
-      instructions: getCoachPrompt(),
-      input: buildPlainHistory(text),
-      max_output_tokens: 140,
+      model: "gpt-4o-mini",
+      messages: buildChatMessages(text),
+      temperature: 0.7,
+      max_tokens: 200,
     }),
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "OpenAI API 오류");
-  return extractOpenAIText(data) || makeLocalReply(text);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error?.message || "OpenAI 대화 오류");
+  return data.choices?.[0]?.message?.content?.trim() || makeLocalReply(text);
 }
 
-function buildPlainHistory(text) {
+function buildChatMessages(text) {
   const history = state.chatMessages
     .filter((message) => message.role !== "system")
     .slice(0, -1)
     .slice(-8)
-    .map((message) => `${message.role === "user" ? "Student" : "Coach"}: ${message.text}`)
-    .join("\n");
-  return `${history}\nStudent: ${text}`.trim();
-}
-
-function extractOpenAIText(data) {
-  if (data.output_text) return data.output_text.trim();
-  return (
-    data.output
-      ?.flatMap((item) => item.content || [])
-      .map((content) => content.text || "")
-      .join("\n")
-      .trim() || ""
-  );
+    .map((message) => ({
+      role: message.role === "user" ? "user" : "assistant",
+      content: message.text,
+    }));
+  return [
+    { role: "system", content: getCoachPrompt() },
+    ...history,
+    { role: "user", content: text },
+  ];
 }
 
 function makeLocalReply(text) {

@@ -21,6 +21,8 @@ const ALLOWED_ORIGINS = [
 const GEMINI_BASE = "https://generativelanguage.googleapis.com";
 const OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech";
 const OPENAI_TTS_PATH = "/openai/v1/audio/speech";
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_CHAT_PATH = "/openai/v1/chat/completions";
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 const RATE_LIMIT_BLOCK_SECONDS = 600;
@@ -194,7 +196,8 @@ export default {
     // 허용 경로: Gemini generateContent + OpenAI TTS. 그 외는 모두 차단.
     const isGemini = /^\/v1beta\/models\/[^/]+:generateContent$/.test(url.pathname);
     const isOpenAiTts = url.pathname === OPENAI_TTS_PATH;
-    if (!isGemini && !isOpenAiTts) {
+    const isOpenAiChat = url.pathname === OPENAI_CHAT_PATH;
+    if (!isGemini && !isOpenAiTts && !isOpenAiChat) {
       return new Response("Not Found", { status: 404, headers: cors });
     }
     const apiKey = isGemini ? readKey(env) : readOpenAiKey(env);
@@ -239,7 +242,7 @@ export default {
           },
           body,
         })
-      : await fetch(OPENAI_TTS_URL, {
+      : await fetch(isOpenAiTts ? OPENAI_TTS_URL : OPENAI_CHAT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

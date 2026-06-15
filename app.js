@@ -26,7 +26,6 @@ import {
   speak,
   speakLine,
   stopAllAudio,
-  characterCloudVoice,
   renderVoiceOptions,
   selectVoice,
   primeAudio,
@@ -802,8 +801,7 @@ function bindEvents() {
   $("#aiPromptBtn").addEventListener("click", suggestChatPrompt);
   $("#aiMicBtn").addEventListener("click", startAiRecognition);
   $("#aiReadBtn").addEventListener("click", () => {
-    const character = activeCharacter();
-    speak(extractEnglishForSpeech(state.lastAiReply), character.rate, character.pitch, characterCloudVoice(character));
+    speak(extractEnglishForSpeech(state.lastAiReply));
   });
   $("#voiceRecordBtn").addEventListener("click", toggleVoiceRecording);
   $("#voiceCompareBtn").addEventListener("click", playVoiceComparison);
