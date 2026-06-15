@@ -876,3 +876,4 @@ renderToday();
 renderPlan();
 renderRoadmap();
 renderChat();
+renderGarden();
