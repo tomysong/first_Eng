@@ -19,6 +19,8 @@ const ALLOWED_ORIGINS = [
 ];
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com";
+const OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech";
+const OPENAI_TTS_PATH = "/openai/v1/audio/speech";
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 const RATE_LIMIT_BLOCK_SECONDS = 600;
@@ -34,19 +36,30 @@ const KEY_NAMES = [
   "API_KEY",
 ];
 
-function readKey(env) {
+// OpenAI TTS 키 (음성 합성용). Gemini 키와 별개로 관리한다.
+const OPENAI_KEY_NAMES = ["OPENAI_KEY", "OPENAI_API_KEY"];
+
+function readKeyFrom(env, names) {
   // 정확한 이름 우선
-  for (const name of KEY_NAMES) {
+  for (const name of names) {
     const value = env[name];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   // 변수 이름 앞뒤에 실수로 공백이 들어갔어도 잡아준다
   for (const [name, value] of Object.entries(env)) {
-    if (typeof value === "string" && value.trim() && KEY_NAMES.includes(name.trim())) {
+    if (typeof value === "string" && value.trim() && names.includes(name.trim())) {
       return value.trim();
     }
   }
   return "";
+}
+
+function readKey(env) {
+  return readKeyFrom(env, KEY_NAMES);
+}
+
+function readOpenAiKey(env) {
+  return readKeyFrom(env, OPENAI_KEY_NAMES);
 }
 
 function corsHeaders(origin) {
@@ -155,8 +168,10 @@ export default {
       return jsonResponse({
         ok: Boolean(readKey(env)),
         keyDetected: Boolean(readKey(env)),
+        openaiKeyDetected: Boolean(readOpenAiKey(env)),
         variableNamesFound: Object.keys(env).filter((name) => typeof env[name] === "string"),
         expectedOneOf: KEY_NAMES,
+        openaiExpectedOneOf: OPENAI_KEY_NAMES,
         rateLimitKVBound: Boolean(env.RATE_LIMIT_KV),
         rateLimitRule: {
           windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
@@ -176,13 +191,18 @@ export default {
     }
 
     const url = new URL(request.url);
-    // Gemini generateContent 경로만 통과시킨다 (다른 호출 차단)
-    if (!/^\/v1beta\/models\/[^/]+:generateContent$/.test(url.pathname)) {
+    // 허용 경로: Gemini generateContent + OpenAI TTS. 그 외는 모두 차단.
+    const isGemini = /^\/v1beta\/models\/[^/]+:generateContent$/.test(url.pathname);
+    const isOpenAiTts = url.pathname === OPENAI_TTS_PATH;
+    if (!isGemini && !isOpenAiTts) {
       return new Response("Not Found", { status: 404, headers: cors });
     }
-    const apiKey = readKey(env);
+    const apiKey = isGemini ? readKey(env) : readOpenAiKey(env);
     if (!apiKey) {
-      return new Response("Server missing GEMINI_KEY", { status: 500, headers: cors });
+      return new Response(isGemini ? "Server missing GEMINI_KEY" : "Server missing OPENAI_KEY", {
+        status: 500,
+        headers: cors,
+      });
     }
 
     const contentLength = Number(request.headers.get("Content-Length") || 0);
@@ -210,14 +230,23 @@ export default {
       }, 413, cors, rateLimitHeaders(limitResult));
     }
 
-    const upstream = await fetch(`${GEMINI_BASE}${url.pathname}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body,
-    });
+    const upstream = isGemini
+      ? await fetch(`${GEMINI_BASE}${url.pathname}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body,
+        })
+      : await fetch(OPENAI_TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body,
+        });
 
     const headers = new Headers(cors);
     headers.set("Content-Type", upstream.headers.get("Content-Type") || "application/json");

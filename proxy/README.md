@@ -23,8 +23,11 @@
    - Namespace name: `kid-eng-rate-limit` (이름은 비슷하게만 해도 됨)
 
    처음 만드는 경우에는 새 Namespace 생성으로 진행하면 됩니다.
-7. 저장 후 다시 **Deploy** 합니다.
-8. 화면 위쪽에 보이는 주소(예: `https://kid-eng-proxy.본인계정.workers.dev`)를 복사합니다.
+7. (선택) **AI 자연 음성(OpenAI TTS)** 도 쓰려면 같은 **Settings → Variables and Secrets** 에서
+   **Add** → 이름 `OPENAI_KEY`, 값에 본인 OpenAI 키를 넣고 **Encrypt(Secret)** 로 저장합니다.
+   (OpenAI 키는 https://platform.openai.com/api-keys 에서 발급. 키 문자열은 채팅·코드에 붙여넣지 말고 이 대시보드에만 입력하세요.)
+8. 저장 후 다시 **Deploy** 합니다.
+9. 화면 위쪽에 보이는 주소(예: `https://kid-eng-proxy.본인계정.workers.dev`)를 복사합니다.
 
 ## 앱에 연결
 
@@ -40,7 +43,8 @@ const GEMINI_PROXY = "https://kid-eng-proxy.본인계정.workers.dev";
 ## 안전장치
 
 - Worker는 우리 앱 주소(`tomysong.github.io`)에서 온 요청만 받습니다(`ALLOWED_ORIGINS`). 다른 사이트는 거부됩니다.
-- Gemini 의 `generateContent` 경로만 통과시키고 나머지는 막습니다.
+- Gemini 의 `generateContent` 경로와 OpenAI TTS(`/openai/v1/audio/speech`) 경로만 통과시키고 나머지는 막습니다.
+- OpenAI 키(`OPENAI_KEY`)도 Gemini 키처럼 서버에만 보관되며 앱에는 절대 노출되지 않습니다. 설정 안 하면 음성은 기기 내장 음성으로 자동 폴백됩니다.
 - Worker 코드 안에 기본 제한이 들어 있습니다.
   - 같은 IP 기준 `60초 동안 20번` 요청 가능
   - 초과하면 `10분` 잠금

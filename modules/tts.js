@@ -1,5 +1,5 @@
 import { state, saveState } from "./store.js";
-import { GEMINI_PROXY, geminiUrl, geminiHeaders, effectiveProvider } from "./api.js";
+import { openaiTtsUrl, cloudTtsReady } from "./api.js";
 import { $ } from "./dom.js";
 
 // 자연스러운 영어 음성 우선순위 (Apple → Google → Microsoft)
@@ -83,7 +83,7 @@ export function renderVoiceOptions() {
   select.innerHTML = "";
   const auto = document.createElement("option");
   auto.value = "";
-  auto.textContent = "자동 추천 (자연스러운 영어 음성)";
+  auto.textContent = cloudTtsReady() ? "자동 (AI 자연 음성)" : "자동 추천 (영어 음성)";
   select.appendChild(auto);
 
   english.forEach((voice) => {
@@ -102,15 +102,33 @@ export function selectVoice() {
   speak("Hi! Nice to meet you. Let's speak English together!", 0.88);
 }
 
-// ---- AI(클라우드) TTS: API 키가 있으면 해당 AI의 음성으로 자동 전환 ----
+// ---- 클라우드 TTS: OpenAI 자연 음성. 키는 Worker(OPENAI_KEY)에만 있음 ----
 
 let speakSession = 0;
 let currentAudio = null;
 let cloudTtsBlockedUntil = 0;
-let geminiTtsModel = "";
 const ttsCache = new Map();
 
-const GEMINI_TTS_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+// 기본 음성(문장·대화 읽기). OpenAI gpt-4o-mini-tts의 voice.
+const DEFAULT_OPENAI_VOICE = "nova";
+// 아이 학습에 맞춘 말투 지시 (gpt-4o-mini-tts instructions)
+const TTS_INSTRUCTIONS =
+  "Speak in a warm, friendly, encouraging voice for a young child learning English. Use clear, natural intonation at a slightly slow, gentle pace.";
+
+// iOS Safari는 '사용자 제스처 중 한 번 재생한 적 있는' <audio>만 이후
+// 프로그램적으로 재생할 수 있다. 그래서 오디오 요소 하나를 재사용하고,
+// 첫 터치에서 무음으로 깨워둔다(primeAudio → app.js의 첫 클릭에서 호출).
+let sharedAudio = null;
+let audioPrimed = false;
+
+export function primeAudio() {
+  if (audioPrimed) return;
+  audioPrimed = true;
+  sharedAudio = new Audio();
+  sharedAudio.src =
+    "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+  sharedAudio.play().then(() => sharedAudio.pause()).catch(() => {});
+}
 
 export function bumpSpeakSession() {
   speakSession += 1;
@@ -130,119 +148,49 @@ export function stopAllAudio() {
 }
 
 export function cloudTtsEnabled() {
-  // 기기 내장(브라우저) 음성만 사용한다.
-  // 클라우드 TTS는 한 문장 ~4.5초로 느리고, 무료 한도(429)에 쉽게 걸려
-  // 로봇 음성으로 폴백되는 문제가 있어 비활성화했다.
-  return false;
+  // 사용자가 기기 음성을 직접 고르면 그걸 쓰고, 아니면 OpenAI 클라우드 음성.
+  if (state.voiceName) return false;
+  if (Date.now() < cloudTtsBlockedUntil) return false;
+  return cloudTtsReady();
 }
 
 export function defaultCloudVoice() {
-  return effectiveProvider() === "gemini" ? "Leda" : "marin";
+  return DEFAULT_OPENAI_VOICE;
 }
 
 export function characterCloudVoice(character) {
-  return effectiveProvider() === "gemini" ? character.geminiVoice : character.openaiVoice;
+  return character.openaiVoice || DEFAULT_OPENAI_VOICE;
 }
 
 export function clearTtsCache() {
   ttsCache.forEach((url) => URL.revokeObjectURL(url));
   ttsCache.clear();
   cloudTtsBlockedUntil = 0;
-  geminiTtsModel = "";
-}
-
-function pcmToWavBlob(base64, sampleRate) {
-  const binary = atob(base64);
-  const pcm = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) pcm[i] = binary.charCodeAt(i);
-
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  const writeText = (offset, text) => {
-    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
-  };
-  writeText(0, "RIFF");
-  view.setUint32(4, 36 + pcm.length, true);
-  writeText(8, "WAVE");
-  writeText(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeText(36, "data");
-  view.setUint32(40, pcm.length, true);
-  return new Blob([header, pcm], { type: "audio/wav" });
-}
-
-async function fetchGeminiTts(text, voice) {
-  const models = geminiTtsModel ? [geminiTtsModel] : GEMINI_TTS_MODELS;
-  let lastError = new Error("Gemini TTS 오류");
-  for (const model of models) {
-    const response = await fetch(
-      geminiUrl(model),
-      {
-        method: "POST",
-        headers: geminiHeaders(),
-        body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
-          },
-        }),
-      }
-    );
-    const data = await response.json();
-    if (!response.ok) {
-      lastError = new Error(data.error?.message || "Gemini TTS 오류");
-      continue;
-    }
-    const base64 = data.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData
-      ?.data;
-    if (!base64) {
-      lastError = new Error("Gemini TTS 응답에 오디오가 없어요");
-      continue;
-    }
-    geminiTtsModel = model;
-    // Gemini TTS는 24kHz 16bit mono PCM을 돌려준다
-    return URL.createObjectURL(pcmToWavBlob(base64, 24000));
-  }
-  throw lastError;
 }
 
 async function fetchOpenAiTts(text, voice) {
-  const response = await fetch("https://api.openai.com/v1/audio/speech", {
+  const response = await fetch(openaiTtsUrl(), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${state.aiKey}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-4o-mini-tts",
-      voice,
+      voice: voice || DEFAULT_OPENAI_VOICE,
       input: text,
       response_format: "mp3",
+      instructions: TTS_INSTRUCTIONS,
     }),
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error?.message || "OpenAI TTS 오류");
-  }
+  if (!response.ok) throw new Error("OpenAI TTS 오류");
   return URL.createObjectURL(await response.blob());
 }
 
 async function fetchCloudAudio(text, voice) {
-  const provider = effectiveProvider();
-  const key = `${provider}:${voice}:${text}`;
+  const key = `${voice}:${text}`;
   if (ttsCache.has(key)) return ttsCache.get(key);
 
-  const url =
-    provider === "gemini" ? await fetchGeminiTts(text, voice) : await fetchOpenAiTts(text, voice);
+  const url = await fetchOpenAiTts(text, voice);
   ttsCache.set(key, url);
-  if (ttsCache.size > 24) {
+  if (ttsCache.size > 40) {
     const oldest = ttsCache.keys().next().value;
     URL.revokeObjectURL(ttsCache.get(oldest));
     ttsCache.delete(oldest);
@@ -250,19 +198,27 @@ async function fetchCloudAudio(text, voice) {
   return url;
 }
 
+// 같은 문장을 다시 들을 때 즉시 재생되도록 미리 받아 캐시에 넣어둔다.
+export function prefetchCloudAudio(text, voice = DEFAULT_OPENAI_VOICE) {
+  if (!cloudTtsEnabled() || !text) return;
+  fetchCloudAudio(text, voice).catch(() => {});
+}
+
 function playUrl(url) {
   return new Promise((resolve) => {
-    const audio = new Audio(url);
+    const audio = sharedAudio || new Audio();
+    audio.src = url;
     currentAudio = audio;
     audio.onended = audio.onerror = () => {
       if (currentAudio === audio) currentAudio = null;
       resolve();
     };
-    audio.play().catch(resolve);
+    const played = audio.play();
+    if (played && typeof played.catch === "function") played.catch(() => resolve());
   });
 }
 
-export async function speak(text, rate = 0.86, pitch = 1.04, cloudVoice = "") {
+export async function speak(text, rate = 0.92, pitch = 1.02, cloudVoice = "") {
   speakSession += 1;
   await speakLine(text, rate, pitch, cloudVoice);
 }
@@ -275,8 +231,8 @@ export async function speakLine(text, rate, pitch, cloudVoice) {
       await playUrl(url);
       return;
     } catch {
-      // 실패하면 1분간 클라우드 TTS를 쉬고 브라우저 음성으로 폴백
-      cloudTtsBlockedUntil = Date.now() + 60000;
+      // 실패하면 잠깐(20초) 클라우드를 쉬고 기기 음성으로 폴백
+      cloudTtsBlockedUntil = Date.now() + 20000;
     }
   }
   await speakLocal(text, rate, pitch);

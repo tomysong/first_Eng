@@ -17,6 +17,16 @@ export function geminiReady() {
   return Boolean(GEMINI_PROXY) || Boolean(state.aiKey);
 }
 
+// OpenAI TTS는 같은 Cloudflare Worker의 /openai 경로로 프록시한다.
+// 키는 Worker 환경변수(OPENAI_KEY)에만 있고 앱에는 절대 노출되지 않는다.
+export function openaiTtsUrl() {
+  return `${GEMINI_PROXY}/openai/v1/audio/speech`;
+}
+
+export function cloudTtsReady() {
+  return Boolean(GEMINI_PROXY);
+}
+
 export function effectiveProvider() {
   return GEMINI_PROXY ? "gemini" : state.aiProvider;
 }

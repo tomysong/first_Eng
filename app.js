@@ -29,6 +29,7 @@ import {
   characterCloudVoice,
   renderVoiceOptions,
   selectVoice,
+  primeAudio,
   bumpSpeakSession,
   getSpeakSession,
 } from "./modules/tts.js";
@@ -766,6 +767,8 @@ function addProfile() {
 }
 
 function bindEvents() {
+  // iOS: 첫 사용자 제스처에서 오디오를 깨워 두면 이후 AI 음성이 정상 재생된다
+  document.addEventListener("pointerdown", primeAudio, { once: true });
   $$(".tab").forEach((tab) => tab.addEventListener("click", () => switchTab(tab.dataset.tab)));
   $("#profileSaveBtn").addEventListener("click", addProfile);
   $("#profileSwitchBtn").addEventListener("click", showProfileGate);
