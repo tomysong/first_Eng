@@ -1432,6 +1432,25 @@ input::placeholder {
   letter-spacing: var(--tr-footnote);
 }
 
+.bubble-play {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--r-capsule);
+  background: var(--tint-soft);
+  color: var(--teal);
+  font: inherit;
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.bubble-play:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+
 .chat-actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

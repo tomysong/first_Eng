@@ -173,6 +173,16 @@ function addChatBubble(role, text, characterKey) {
     role === "user" ? "You" : role === "system" ? "Note" : `${character.emoji} ${character.name}`;
   bubble.innerHTML = `<strong>${label}</strong><p></p>`;
   bubble.querySelector("p").textContent = text;
+  // AI 말풍선은 탭해서 그 문장을 바로 들을 수 있게 듣기 버튼을 단다
+  if (role === "ai") {
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.className = "bubble-play";
+    playBtn.textContent = "🔊 듣기";
+    playBtn.setAttribute("aria-label", "이 문장 듣기");
+    playBtn.addEventListener("click", () => speak(extractEnglishForSpeech(text)));
+    bubble.appendChild(playBtn);
+  }
   $("#chatLog").appendChild(bubble);
 }
 

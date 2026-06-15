@@ -49,8 +49,11 @@ export async function transcribe(blob) {
   const ext = /mp4|mpeg|m4a|aac/.test(type) ? "mp4" : /wav/.test(type) ? "wav" : "webm";
   const form = new FormData();
   form.append("file", blob, `speech.${ext}`);
-  form.append("model", "whisper-1");
+  // gpt-4o-mini-transcribe가 whisper-1보다 짧은·어눌한 아동 발화에 더 정확하다
+  form.append("model", "gpt-4o-mini-transcribe");
   form.append("language", "en");
+  // 인식 정확도를 돕는 맥락 힌트
+  form.append("prompt", "Casual spoken English by a young child learning English. Short, simple, friendly sentences.");
   const response = await fetch(openaiTranscribeUrl(), { method: "POST", body: form });
   if (!response.ok) throw new Error("Whisper 전사 오류");
   const data = await response.json().catch(() => ({}));
