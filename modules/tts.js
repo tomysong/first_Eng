@@ -2,9 +2,32 @@ import { state, saveState } from "./store.js";
 import { GEMINI_PROXY, geminiUrl, geminiHeaders, effectiveProvider } from "./api.js";
 import { $ } from "./dom.js";
 
+// 자연스러운 영어 음성 우선순위 (Apple → Google → Microsoft)
+const PREFERRED_VOICES = [
+  // Apple (iOS/macOS) — 또렷하고 자연스러운 음성
+  "Samantha",
+  "Ava",
+  "Allison",
+  "Susan",
+  "Zoe",
+  "Nicky",
+  "Karen",
+  "Moira",
+  // Google (Android/Chrome)
+  "Google US English",
+  "Google UK English Female",
+  // Microsoft (Windows/Edge) — Neural/Online이 가장 자연스러움
+  "Microsoft Aria",
+  "Microsoft Jenny",
+  "Microsoft Michelle",
+  "Microsoft Zira",
+];
+
 export function getBestVoice() {
   const voices = window.speechSynthesis?.getVoices?.() || [];
+  // 반드시 영어 음성만 쓴다(한국어 음성으로 영어를 읽으면 매우 어색해짐)
   const english = voices.filter((voice) => /^en/i.test(voice.lang));
+  if (!english.length) return null;
 
   // 사용자가 직접 고른 목소리가 있으면 최우선
   if (state.voiceName) {
@@ -12,31 +35,27 @@ export function getBestVoice() {
     if (saved) return saved;
   }
 
-  // 미국 여성/밝은 음성 우선. 같은 이름이면 Enhanced/Premium/Natural 변형 우선
-  const preferredNames = [
-    "Ava",
-    "Samantha",
-    "Allison",
-    "Susan",
-    "Joelle",
-    "Google US English",
-    "Aria",
-    "Jenny",
-    "Michelle",
-    "Zoe",
-    "Serena",
-  ];
-  for (const name of preferredNames) {
-    const matches = english.filter((voice) => voice.name.includes(name));
+  // 미국 영어를 앞쪽으로 정렬
+  const sorted = [...english].sort(
+    (a, b) => (/^en[-_]US/i.test(a.lang) ? 0 : 1) - (/^en[-_]US/i.test(b.lang) ? 0 : 1)
+  );
+
+  // 선호 음성명 + 고품질 변형(natural/neural/enhanced/premium/online) 우선
+  for (const name of PREFERRED_VOICES) {
+    const matches = sorted.filter((voice) => voice.name.includes(name));
     if (matches.length) {
-      return matches.find((voice) => /enhanced|premium|natural/i.test(voice.name)) || matches[0];
+      return (
+        matches.find((voice) => /natural|neural|enhanced|premium|online/i.test(voice.name)) ||
+        matches[0]
+      );
     }
   }
 
+  // 선호 목록에 없으면: 고품질 키워드 음성 → 미국 영어 → 아무 영어
   return (
-    english.find((voice) => /^en-US/i.test(voice.lang)) ||
-    english[0] ||
-    null
+    sorted.find((voice) => /natural|neural|enhanced|premium/i.test(voice.name)) ||
+    sorted.find((voice) => /^en[-_]US/i.test(voice.lang)) ||
+    sorted[0]
   );
 }
 
@@ -64,11 +83,7 @@ export function renderVoiceOptions() {
   select.innerHTML = "";
   const auto = document.createElement("option");
   auto.value = "";
-  const cloudReady =
-    Boolean(state.aiKey) && (state.aiProvider === "gemini" || state.aiProvider === "openai");
-  auto.textContent = cloudReady
-    ? `자동 (${state.aiProvider === "gemini" ? "Gemini" : "OpenAI"} AI 목소리)`
-    : "자동 추천 (미국 여성 우선)";
+  auto.textContent = "자동 추천 (자연스러운 영어 음성)";
   select.appendChild(auto);
 
   english.forEach((voice) => {
@@ -115,9 +130,10 @@ export function stopAllAudio() {
 }
 
 export function cloudTtsEnabled() {
-  if (state.voiceName || Date.now() < cloudTtsBlockedUntil) return false;
-  if (GEMINI_PROXY) return true;
-  return Boolean(state.aiKey) && (state.aiProvider === "gemini" || state.aiProvider === "openai");
+  // 기기 내장(브라우저) 음성만 사용한다.
+  // 클라우드 TTS는 한 문장 ~4.5초로 느리고, 무료 한도(429)에 쉽게 걸려
+  // 로봇 음성으로 폴백되는 문제가 있어 비활성화했다.
+  return false;
 }
 
 export function defaultCloudVoice() {
