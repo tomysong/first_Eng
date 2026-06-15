@@ -8,26 +8,26 @@
 :root {
   color-scheme: light;
 
-  /* iOS 시맨틱 컬러 */
-  --bg-grouped: #f2f2f7;            /* systemGroupedBackground */
-  --bg-cell: #ffffff;               /* secondarySystemGroupedBackground */
-  --label: #111213;
-  --label-2: rgba(60, 60, 67, 0.6); /* secondaryLabel */
-  --label-3: rgba(60, 60, 67, 0.3); /* tertiaryLabel */
-  --separator: rgba(60, 60, 67, 0.29);
-  --fill: rgba(120, 120, 128, 0.12);    /* systemFill */
-  --fill-soft: rgba(120, 120, 128, 0.08);
-  --green: #248a3d;                 /* systemGreen (text-safe) */
+  /* 부드러운 파스텔 배경/텍스트 (눈이 편안한 따뜻한 톤) */
+  --bg-grouped: #fdf6f7;            /* 연핑크 화이트 배경 */
+  --bg-cell: #ffffff;               /* 카드 흰색 */
+  --label: #2c2530;                 /* 따뜻한 차콜(순검정 대신) */
+  --label-2: rgba(74, 58, 66, 0.62); /* secondaryLabel */
+  --label-3: rgba(74, 58, 66, 0.32); /* tertiaryLabel */
+  --separator: rgba(74, 58, 66, 0.2);
+  --fill: rgba(187, 101, 130, 0.12);    /* 연로즈 필 */
+  --fill-soft: rgba(187, 101, 130, 0.07);
+  --green: #2f8a52;                 /* 성공색(살짝 따뜻한 그린) */
   --red: #d70015;
 
-  /* 브랜드 (틴트) */
-  --teal: #155e63;
-  --teal-2: #1c7b79;
-  --tint-soft: rgba(21, 94, 99, 0.12);
-  --coral: #f36f56;
-  --gold: #f4b942;
-  --mint: #d8f3e7;
-  --sky: #d9ecff;
+  /* 브랜드: 더스티 로즈 + 소프트 피치 + 크림 */
+  --teal: #bb6582;                  /* 메인(더스티 로즈) — 탭/배지/강조 */
+  --teal-2: #cf8aa0;                /* 보조(밝은 로즈) */
+  --tint-soft: rgba(187, 101, 130, 0.13);
+  --coral: #df7f61;                 /* 포인트(소프트 피치) — primary 버튼 */
+  --gold: #ecb45a;                  /* 크림 골드 */
+  --mint: #f6e8d8;                  /* 크림 보조 배경 */
+  --sky: #f7dde7;                   /* 연로즈 보조 배경 */
 
   /* 구형 변수 호환 */
   --ink: var(--label);
@@ -107,10 +107,10 @@ a {
   align-items: center;
   min-height: 168px;
   padding: 24px;
-  background: linear-gradient(150deg, rgba(21, 94, 99, 0.97), rgba(16, 74, 82, 0.93));
+  background: linear-gradient(150deg, #c06b86, #e0997b);
   color: white;
   border-radius: 24px;
-  box-shadow: 0 8px 28px rgba(16, 74, 82, 0.25);
+  box-shadow: 0 8px 28px rgba(187, 101, 130, 0.28);
   overflow: hidden;
 }
 
@@ -141,7 +141,7 @@ a {
   inset: 20px;
   border-radius: 50%;
   background: linear-gradient(145deg, var(--gold), #ffe6a8);
-  box-shadow: inset -8px -10px 0 rgba(243, 111, 86, 0.2);
+  box-shadow: inset -8px -10px 0 rgba(223, 127, 97, 0.2);
 }
 
 .eye {
@@ -226,7 +226,7 @@ a {
   content: "";
   width: 14px;
   height: 14px;
-  border: 2.5px solid #16323a;
+  border: 2.5px solid #44343c;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.35);
 }
@@ -468,7 +468,7 @@ body:not(.parent-mode) .tab.parent-only {
 .complete-btn {
   margin-top: 16px;
   background: var(--teal);
-  box-shadow: 0 4px 14px rgba(21, 94, 99, 0.3);
+  box-shadow: 0 4px 14px rgba(187, 101, 130, 0.3);
 }
 
 .parent-gate {
@@ -673,7 +673,7 @@ body:not(.parent-mode) .tab.parent-only {
   margin-top: 8px;
   background: var(--coral);
   color: white;
-  box-shadow: 0 4px 14px rgba(243, 111, 86, 0.3);
+  box-shadow: 0 4px 14px rgba(223, 127, 97, 0.3);
 }
 
 .secondary-btn {
@@ -748,7 +748,7 @@ body:not(.parent-mode) .tab.parent-only {
 }
 
 .result-panel {
-  background: linear-gradient(150deg, #ffffff, #f1fff8);
+  background: linear-gradient(150deg, #ffffff, #fdeef2);
 }
 
 /* ---------- 오늘의 회화 ---------- */
@@ -772,7 +772,7 @@ body:not(.parent-mode) .tab.parent-only {
 
 .badge.muted {
   background: var(--sky);
-  color: #24506b;
+  color: #8a4a60;
 }
 
 .dialogue {
@@ -921,8 +921,8 @@ body:not(.parent-mode) .tab.parent-only {
 }
 
 .phrase-card.weak {
-  background: rgba(243, 111, 86, 0.1);
-  border-color: rgba(243, 111, 86, 0.4);
+  background: rgba(223, 127, 97, 0.1);
+  border-color: rgba(223, 127, 97, 0.4);
 }
 
 .phrase-card strong {
@@ -955,7 +955,7 @@ body:not(.parent-mode) .tab.parent-only {
   margin-bottom: 16px;
   padding: 20px;
   border-radius: var(--r-card);
-  background: linear-gradient(150deg, #fff8eb, #ffffff);
+  background: linear-gradient(150deg, #faf0e6, #ffffff);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
@@ -1107,8 +1107,8 @@ body:not(.parent-mode) .tab.parent-only {
 }
 
 .roadmap-card.current {
-  background: linear-gradient(150deg, #f2fff8, #ffffff);
-  box-shadow: 0 0 0 1.5px rgba(52, 199, 89, 0.45), 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: linear-gradient(150deg, #fdeef2, #ffffff);
+  box-shadow: 0 0 0 1.5px rgba(187, 101, 130, 0.4), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .roadmap-card.locked {
@@ -1195,7 +1195,7 @@ select {
 
 select:focus,
 input:focus {
-  outline: 2px solid rgba(21, 94, 99, 0.5);
+  outline: 2px solid rgba(187, 101, 130, 0.5);
   outline-offset: -1px;
 }
 
@@ -1587,4 +1587,131 @@ input::placeholder {
   .chat-bubble {
     max-width: 86%;
   }
+}
+
+/* ---- 내 꽃 화분 (28일 완주 보상) ---- */
+.garden-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.garden-art {
+  width: 100%;
+  max-width: 240px;
+  margin: 0 auto;
+}
+
+.garden-art svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.garden-progress {
+  width: 100%;
+}
+
+.garden-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.garden-progress-head strong {
+  font-size: var(--fs-title3);
+  color: var(--label);
+}
+
+.garden-progress-head span {
+  font-size: var(--fs-subhead);
+  color: var(--muted);
+}
+
+.garden-bar {
+  width: 100%;
+  height: 12px;
+  border-radius: var(--r-capsule);
+  background: var(--fill);
+  overflow: hidden;
+}
+
+.garden-bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: var(--r-capsule);
+  background: linear-gradient(90deg, var(--teal-2), var(--green));
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.garden-msg {
+  margin-top: 10px;
+  font-size: var(--fs-callout);
+  color: var(--label);
+}
+
+.garden-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 18px;
+  border-radius: var(--r-card);
+  background: var(--fill-soft);
+  border: 1.5px dashed var(--separator);
+}
+
+.garden-reveal .garden-flower-emoji {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.garden-reveal .garden-flower-name {
+  font-size: var(--fs-body);
+  color: var(--label);
+}
+
+.garden-reveal .garden-flower-meaning {
+  font-size: var(--fs-subhead);
+  color: var(--muted);
+}
+
+.garden-reveal.bloomed {
+  background: linear-gradient(160deg, #fff8e6, var(--mint));
+  border: 2px solid var(--gold);
+  animation: garden-pop 0.6s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+.garden-reveal.bloomed .garden-flower-emoji {
+  font-size: 48px;
+  animation: garden-wiggle 1.8s ease-in-out infinite;
+}
+
+.garden-reveal.bloomed .garden-flower-name {
+  color: var(--teal);
+  font-weight: 700;
+}
+
+.garden-note {
+  margin-top: 2px;
+}
+
+@keyframes garden-pop {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes garden-wiggle {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-bar-fill { transition: none; }
+  .garden-reveal.bloomed,
+  .garden-reveal.bloomed .garden-flower-emoji { animation: none; }
 }

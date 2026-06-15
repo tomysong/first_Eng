@@ -19,6 +19,10 @@ const ALLOWED_ORIGINS = [
 ];
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com";
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const RATE_LIMIT_BLOCK_SECONDS = 600;
+const MAX_BODY_BYTES = 30_000;
 
 // 키 변수 이름을 조금 틀리게 넣어도 잡아주도록 흔한 이름들을 모두 확인한다
 const KEY_NAMES = [
@@ -56,6 +60,86 @@ function corsHeaders(origin) {
   };
 }
 
+function jsonResponse(body, status, cors, extraHeaders = {}) {
+  return new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: {
+      ...cors,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
+  });
+}
+
+function getClientIp(request) {
+  const forwarded = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "";
+  return forwarded.split(",")[0].trim() || "unknown";
+}
+
+function safeKeyPart(value) {
+  return value.replace(/[^a-zA-Z0-9:._-]/g, "_");
+}
+
+async function applyRateLimit(request, env) {
+  if (!env.RATE_LIMIT_KV) {
+    return { allowed: true, enabled: false };
+  }
+
+  const now = Date.now();
+  const clientIp = safeKeyPart(getClientIp(request));
+  const blockedKey = `rl:block:${clientIp}`;
+  const blockedUntil = Number(await env.RATE_LIMIT_KV.get(blockedKey) || 0);
+
+  if (blockedUntil > now) {
+    return {
+      allowed: false,
+      enabled: true,
+      retryAfter: Math.max(1, Math.ceil((blockedUntil - now) / 1000)),
+      remaining: 0,
+    };
+  }
+
+  const bucket = Math.floor(now / (RATE_LIMIT_WINDOW_SECONDS * 1000));
+  const bucketKey = `rl:count:${clientIp}:${bucket}`;
+  const currentCount = Number(await env.RATE_LIMIT_KV.get(bucketKey) || 0);
+
+  if (currentCount >= RATE_LIMIT_MAX_REQUESTS) {
+    const nextBlockedUntil = now + RATE_LIMIT_BLOCK_SECONDS * 1000;
+    await env.RATE_LIMIT_KV.put(blockedKey, String(nextBlockedUntil), {
+      expirationTtl: RATE_LIMIT_BLOCK_SECONDS,
+    });
+    return {
+      allowed: false,
+      enabled: true,
+      retryAfter: RATE_LIMIT_BLOCK_SECONDS,
+      remaining: 0,
+    };
+  }
+
+  await env.RATE_LIMIT_KV.put(bucketKey, String(currentCount + 1), {
+    expirationTtl: RATE_LIMIT_WINDOW_SECONDS + 60,
+  });
+
+  const resetIn = RATE_LIMIT_WINDOW_SECONDS - Math.floor((now / 1000) % RATE_LIMIT_WINDOW_SECONDS);
+  return {
+    allowed: true,
+    enabled: true,
+    remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - (currentCount + 1)),
+    resetIn,
+  };
+}
+
+function rateLimitHeaders(result) {
+  if (!result.enabled) return {};
+  return {
+    "X-RateLimit-Limit": String(RATE_LIMIT_MAX_REQUESTS),
+    "X-RateLimit-Remaining": String(result.remaining ?? 0),
+    "X-RateLimit-Window": String(RATE_LIMIT_WINDOW_SECONDS),
+    ...(result.resetIn ? { "X-RateLimit-Reset": String(result.resetIn) } : {}),
+    ...(result.retryAfter ? { "Retry-After": String(result.retryAfter) } : {}),
+  };
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -68,16 +152,19 @@ export default {
     // 진단용: GET 요청 시 키 값은 절대 노출하지 않고, 등록된 변수 이름과
     // 키 감지 여부만 알려준다. 설정이 맞는지 확인하는 용도.
     if (request.method === "GET") {
-      const body = {
+      return jsonResponse({
         ok: Boolean(readKey(env)),
         keyDetected: Boolean(readKey(env)),
         variableNamesFound: Object.keys(env).filter((name) => typeof env[name] === "string"),
         expectedOneOf: KEY_NAMES,
-      };
-      return new Response(JSON.stringify(body, null, 2), {
-        status: 200,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
+        rateLimitKVBound: Boolean(env.RATE_LIMIT_KV),
+        rateLimitRule: {
+          windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+          maxRequests: RATE_LIMIT_MAX_REQUESTS,
+          blockSeconds: RATE_LIMIT_BLOCK_SECONDS,
+          maxBodyBytes: MAX_BODY_BYTES,
+        },
+      }, 200, cors);
     }
 
     // 허용 목록에 없는 사이트의 브라우저 요청은 막는다
@@ -98,7 +185,31 @@ export default {
       return new Response("Server missing GEMINI_KEY", { status: 500, headers: cors });
     }
 
+    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    if (contentLength > MAX_BODY_BYTES) {
+      return jsonResponse({
+        error: "Request body too large",
+        limitBytes: MAX_BODY_BYTES,
+      }, 413, cors);
+    }
+
+    const limitResult = await applyRateLimit(request, env);
+    if (!limitResult.allowed) {
+      return jsonResponse({
+        error: "Too many requests",
+        message: "Please wait a little and try again.",
+        retryAfterSeconds: limitResult.retryAfter,
+      }, 429, cors, rateLimitHeaders(limitResult));
+    }
+
     const body = await request.text();
+    if (new TextEncoder().encode(body).length > MAX_BODY_BYTES) {
+      return jsonResponse({
+        error: "Request body too large",
+        limitBytes: MAX_BODY_BYTES,
+      }, 413, cors, rateLimitHeaders(limitResult));
+    }
+
     const upstream = await fetch(`${GEMINI_BASE}${url.pathname}`, {
       method: "POST",
       headers: {
@@ -110,6 +221,9 @@ export default {
 
     const headers = new Headers(cors);
     headers.set("Content-Type", upstream.headers.get("Content-Type") || "application/json");
+    for (const [key, value] of Object.entries(rateLimitHeaders(limitResult))) {
+      headers.set(key, value);
+    }
     return new Response(upstream.body, { status: upstream.status, headers });
   },
 };

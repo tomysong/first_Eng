@@ -5,9 +5,6 @@ import {
   curriculumSeeds,
   dialogues,
   phraseBank,
-  suggestedPrompts,
-  chatCharacters,
-  talkMissions,
   yearlyRoadmap,
 } from "./modules/data.js";
 import { $, $$ } from "./modules/dom.js";
@@ -18,100 +15,45 @@ import {
   ensureProfiles,
   activeProfileId,
   currentProfile,
-  storeGet,
   storeSet,
   storeRemove,
 } from "./modules/profiles.js";
 import { applyHybridProgress, dateStamp } from "./modules/progress.js";
-
-// 키 프록시 서버 주소(Cloudflare Worker). 값이 있으면 아이가 키 입력 없이
-// AI 대화·목소리를 쓰고 키는 절대 노출되지 않는다. 배포법: proxy/README.md
-// 비워 두면 예전처럼 보호자가 키를 직접 입력하는 방식으로 동작한다.
-const GEMINI_PROXY = "https://kid-eng-proxy.hssong1107.workers.dev";
-const GEMINI_BASE = "https://generativelanguage.googleapis.com";
-
-// 프록시가 있으면 Gemini를 키 없이 호출할 수 있으므로 항상 사용 가능
-function geminiReady() {
-  return Boolean(GEMINI_PROXY) || Boolean(state.aiKey);
-}
-
-// 실제로 사용할 AI 제공자(프록시가 있으면 Gemini 고정)
-function effectiveProvider() {
-  return GEMINI_PROXY ? "gemini" : state.aiProvider;
-}
-
-function geminiUrl(model) {
-  return `${GEMINI_PROXY || GEMINI_BASE}/v1beta/models/${model}:generateContent`;
-}
-
-function geminiHeaders() {
-  const headers = { "Content-Type": "application/json" };
-  if (!GEMINI_PROXY) headers["x-goog-api-key"] = state.aiKey;
-  return headers;
-}
+import { state, saveState, activeLevel } from "./modules/store.js";
+import { GEMINI_PROXY } from "./modules/api.js";
+import { renderGarden } from "./modules/garden.js";
+import {
+  speak,
+  speakLine,
+  stopAllAudio,
+  characterCloudVoice,
+  renderVoiceOptions,
+  selectVoice,
+  bumpSpeakSession,
+  getSpeakSession,
+} from "./modules/tts.js";
+import {
+  initChat,
+  renderChat,
+  sendAiMessage,
+  activeCharacter,
+  renderTalkMissions,
+  saveAiSettings,
+  suggestChatPrompt,
+  startAiRecognition,
+} from "./modules/chat.js";
+import {
+  initParent,
+  isParentMode,
+  openParentGate,
+  submitParentGate,
+  lockParentMode,
+  startPinReset,
+  renderParentDashboard,
+  updateModeUI,
+} from "./modules/parent.js";
 
 ensureProfiles();
-
-function readArray(name) {
-  try {
-    const value = JSON.parse(storeGet(name) || "[]");
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
-}
-
-const state = {
-  level: storeGet("level") || "",
-  progressDay: Number(storeGet("day") || 1),
-  viewDay: 1,
-  streak: Number(storeGet("streak") || 0),
-  lastCompletedDate: storeGet("lastCompletedDate") || "",
-  lastCompletedDay: Number(storeGet("lastCompletedDay") || 0),
-  versionComplete: storeGet("versionComplete") === "true",
-  updateRequested: storeGet("updateRequested") === "true",
-  quizIndex: 0,
-  score: 0,
-  sentenceIndex: 0,
-  // AI 설정과 목소리는 기기 공통(부모가 한 번만 입력)
-  aiProvider: localStorage.getItem("kidEnglish.aiProvider") || "gemini",
-  aiKey: localStorage.getItem("kidEnglish.aiKey") || "",
-  chatCharacter: storeGet("chatCharacter") || "sunny",
-  voiceName: localStorage.getItem("kidEnglish.voiceName") || "",
-  chatMessages: readArray("chatMessages"),
-  lastAiReply: storeGet("lastAiReply") || "",
-  weakPhrases: readArray("weakPhrases"),
-  bossCleared: readArray("bossCleared"),
-  bossKey: "",
-  bossTargets: [],
-  bossPassed: [],
-  talkMissionKey: "",
-  talkMissions: [],
-  talkMissionDone: [],
-};
-state.viewDay = state.progressDay;
-
-function saveState() {
-  storeSet("level", state.level);
-  storeSet("day", String(state.progressDay));
-  storeSet("streak", String(state.streak));
-  storeSet("lastCompletedDate", state.lastCompletedDate);
-  storeSet("lastCompletedDay", String(state.lastCompletedDay));
-  storeSet("versionComplete", String(state.versionComplete));
-  storeSet("updateRequested", String(state.updateRequested));
-  localStorage.setItem("kidEnglish.aiProvider", state.aiProvider);
-  localStorage.setItem("kidEnglish.aiKey", state.aiKey);
-  storeSet("chatCharacter", state.chatCharacter);
-  localStorage.setItem("kidEnglish.voiceName", state.voiceName);
-  storeSet("chatMessages", JSON.stringify(state.chatMessages.slice(-16)));
-  storeSet("lastAiReply", state.lastAiReply);
-  storeSet("weakPhrases", JSON.stringify(state.weakPhrases.slice(0, 12)));
-  storeSet("bossCleared", JSON.stringify(state.bossCleared));
-}
-
-function activeLevel() {
-  return state.level || "starter";
-}
 
 function buildCurriculum(levelKey) {
   const seeds = curriculumSeeds[levelKey];
@@ -174,6 +116,7 @@ function switchTab(tabId) {
   $$(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === tabId));
   $$(".screen").forEach((screen) => screen.classList.toggle("active", screen.id === tabId));
   if (tabId === "today") renderToday();
+  if (tabId === "garden") renderGarden();
   if (tabId === "plan") renderPlan();
   if (tabId === "chat") renderChat();
   if (tabId === "roadmap") renderRoadmap();
@@ -485,639 +428,6 @@ function renderRoadmap() {
   });
 }
 
-function activeCharacter() {
-  return chatCharacters[state.chatCharacter] || chatCharacters.sunny;
-}
-
-// ---- 렛츠톡식 대화 미션 ----
-
-function getTalkMissions() {
-  const levelKey = activeLevel();
-  const pool = talkMissions[levelKey] || talkMissions.starter;
-  const key = `${levelKey}:${state.viewDay}`;
-  if (state.talkMissionKey !== key) {
-    const start = (state.viewDay - 1) % pool.length;
-    state.talkMissionKey = key;
-    state.talkMissions = [0, 1, 2].map((offset) => pool[(start + offset) % pool.length]);
-    state.talkMissionDone = [];
-  }
-  return state.talkMissions;
-}
-
-function renderTalkMissions() {
-  const missions = getTalkMissions();
-  const list = $("#missionList");
-  list.innerHTML = "";
-  missions.forEach((mission, index) => {
-    const done = state.talkMissionDone.includes(index);
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `mission-item ${done ? "done" : ""}`;
-    item.innerHTML = `
-      <span class="mission-check">${done ? "✅" : "🎯"}</span>
-      <span class="mission-text"><strong></strong><span></span></span>
-      <span class="mission-say">🔊</span>
-    `;
-    item.querySelector("strong").textContent = mission.en;
-    item.querySelector(".mission-text span").textContent = mission.ko;
-    item.addEventListener("click", () => {
-      const character = activeCharacter();
-      speak(mission.en.replace(/_+/g, "something"), character.rate, character.pitch, characterCloudVoice(character));
-    });
-    list.appendChild(item);
-  });
-  $("#missionScore").textContent = `${state.talkMissionDone.length} / ${missions.length}`;
-}
-
-function checkMissionProgress(userText) {
-  const text = ` ${userText.toLowerCase().replace(/[^a-z\s']/g, " ")} `;
-  const missions = getTalkMissions();
-  let newlyDone = false;
-  missions.forEach((mission, index) => {
-    if (state.talkMissionDone.includes(index)) return;
-    const hit = mission.keywords.every((word) => text.includes(` ${word.toLowerCase()} `));
-    if (hit) {
-      state.talkMissionDone.push(index);
-      newlyDone = true;
-    }
-  });
-  if (newlyDone) {
-    renderTalkMissions();
-    const total = missions.length;
-    const done = state.talkMissionDone.length;
-    if (done >= total) {
-      pushChat("system", `🎉 오늘의 대화 미션 ${total}개를 모두 성공했어요! 정말 멋져요!`);
-    } else {
-      pushChat("system", `⭐ 미션 성공! (${done}/${total}) 계속 대화해볼까요?`);
-    }
-  }
-}
-
-function getCoachPrompt() {
-  const { levelKey, day } = getLesson();
-  const missions = getTalkMissions()
-    .filter((_, index) => !state.talkMissionDone.includes(index))
-    .map((mission) => mission.en)
-    .join(" / ");
-  return [
-    "You are a friendly English conversation buddy for a Korean elementary school 5th grader.",
-    activeCharacter().persona,
-    "Always stay in character and keep the chat going like a real friend.",
-    `Student level: ${LEVELS[levelKey].label}. Today's topic: ${day.title}. Goal: ${day.goal}.`,
-    missions ? `Gently guide the student to naturally use these target expressions: ${missions}.` : "",
-    "Reply in this exact style:",
-    "1) React warmly to what the student said (1 short sentence).",
-    "2) One natural English response or comment at the student's level.",
-    "3) A tiny Korean hint in parentheses.",
-    "4) One open follow-up question that invites the student to say more.",
-    "Encourage longer answers over time, but never correct harshly. Keep it under 60 words.",
-    "Do not discuss adult, violent, romantic, or private personal topics. Keep it safe and kind.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function renderCharacterRow() {
-  const row = $("#characterRow");
-  row.innerHTML = "";
-  Object.entries(chatCharacters).forEach(([key, character]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `character-btn ${key === state.chatCharacter ? "active" : ""}`;
-    button.innerHTML = `
-      <span class="character-emoji">${character.emoji}</span>
-      <strong>${character.name}</strong>
-      <span>${character.ko}</span>
-    `;
-    button.addEventListener("click", () => selectCharacter(key));
-    row.appendChild(button);
-  });
-}
-
-function selectCharacter(key) {
-  if (key === state.chatCharacter) return;
-  state.chatCharacter = key;
-  saveState();
-  renderCharacterRow();
-  const character = activeCharacter();
-  pushChat("system", `이제 ${character.emoji} ${character.name}(${character.ko})와 대화해요!`);
-  pushChat("ai", `Hi! I am ${character.name} ${character.emoji}. Let's keep talking in English!`);
-}
-
-function renderChat() {
-  $("#providerSelect").value = state.aiProvider;
-  $("#apiKeyInput").value = state.aiKey;
-  renderCharacterRow();
-  renderTalkMissions();
-
-  if (state.chatMessages.length === 0) {
-    const { day } = getLesson();
-    const character = activeCharacter();
-    state.chatMessages = [
-      {
-        role: "ai",
-        character: state.chatCharacter,
-        text: `Hi! I am ${character.name} ${character.emoji}. Let's talk about "${day.title}". Look at today's missions below and try to use them. What did you do today?`,
-      },
-    ];
-  }
-
-  $("#chatLog").innerHTML = "";
-  state.chatMessages.forEach((message) => addChatBubble(message.role, message.text, message.character));
-  $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
-}
-
-function addChatBubble(role, text, characterKey) {
-  const bubble = document.createElement("div");
-  bubble.className = `chat-bubble ${role}`;
-  const character = chatCharacters[characterKey] || activeCharacter();
-  const label =
-    role === "user" ? "You" : role === "system" ? "Note" : `${character.emoji} ${character.name}`;
-  bubble.innerHTML = `<strong>${label}</strong><p></p>`;
-  bubble.querySelector("p").textContent = text;
-  $("#chatLog").appendChild(bubble);
-}
-
-function pushChat(role, text) {
-  const message = { role, text };
-  if (role === "ai") {
-    message.character = state.chatCharacter;
-    state.lastAiReply = text;
-  }
-  state.chatMessages.push(message);
-  saveState();
-  renderChat();
-}
-
-async function sendAiMessage(text) {
-  const cleanText = text.trim();
-  if (!cleanText) return;
-
-  pushChat("user", cleanText);
-  $("#chatInput").value = "";
-  checkMissionProgress(cleanText);
-  addChatBubble("system", "AI가 짧고 쉬운 영어 답변을 준비하고 있어요...");
-
-  try {
-    const provider = effectiveProvider();
-    const reply =
-      provider === "gemini"
-        ? await callGemini(cleanText)
-        : provider === "openai"
-          ? await callOpenAI(cleanText)
-          : makeLocalReply(cleanText);
-    pushChat("ai", reply);
-    const character = activeCharacter();
-    speak(extractEnglishForSpeech(reply), character.rate, character.pitch, characterCloudVoice(character));
-  } catch (error) {
-    pushChat(
-      "system",
-      `연결이 안 돼서 로컬 코치로 답할게요. ${error.message ? `(${error.message})` : ""}`
-    );
-    const reply = makeLocalReply(cleanText);
-    pushChat("ai", reply);
-  }
-}
-
-async function callGemini(text) {
-  if (!geminiReady()) return makeLocalReply(text);
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: getCoachPrompt() }] },
-    contents: buildGeminiHistory(text),
-    generationConfig: {
-      temperature: 0.7,
-      // thinking 토큰이 출력 한도에 합산되어 빈 응답이 오는 것을 방지
-      maxOutputTokens: 400,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  });
-
-  // Gemini가 일시적으로 바쁠 때(503/UNAVAILABLE)는 잠깐 쉬고 다시 시도
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetch(geminiUrl("gemini-3.5-flash"), {
-      method: "POST",
-      headers: geminiHeaders(),
-      body,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (response.ok) {
-      return (
-        data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("\n").trim() ||
-        makeLocalReply(text)
-      );
-    }
-    const busy = response.status === 503 || data.error?.status === "UNAVAILABLE";
-    if (busy && attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
-      continue;
-    }
-    throw new Error(data.error?.message || "Gemini API 오류");
-  }
-  return makeLocalReply(text);
-}
-
-function buildGeminiHistory(text) {
-  const recent = state.chatMessages
-    .filter((message) => message.role !== "system")
-    .slice(0, -1)
-    .slice(-8)
-    .map((message) => ({
-      role: message.role === "user" ? "user" : "model",
-      parts: [{ text: message.text }],
-    }));
-  recent.push({ role: "user", parts: [{ text }] });
-  return recent;
-}
-
-async function callOpenAI(text) {
-  if (!state.aiKey) return makeLocalReply(text);
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${state.aiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-5.4-mini",
-      instructions: getCoachPrompt(),
-      input: buildPlainHistory(text),
-      max_output_tokens: 140,
-    }),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "OpenAI API 오류");
-  return extractOpenAIText(data) || makeLocalReply(text);
-}
-
-function buildPlainHistory(text) {
-  const history = state.chatMessages
-    .filter((message) => message.role !== "system")
-    .slice(0, -1)
-    .slice(-8)
-    .map((message) => `${message.role === "user" ? "Student" : "Coach"}: ${message.text}`)
-    .join("\n");
-  return `${history}\nStudent: ${text}`.trim();
-}
-
-function extractOpenAIText(data) {
-  if (data.output_text) return data.output_text.trim();
-  return (
-    data.output
-      ?.flatMap((item) => item.content || [])
-      .map((content) => content.text || "")
-      .join("\n")
-      .trim() || ""
-  );
-}
-
-function makeLocalReply(text) {
-  const { levelKey, day } = getLesson();
-  const starters = {
-    starter: "Great! I like your sentence.",
-    a1: "Nice answer! You can add one more detail.",
-    a1plus: "Good idea! Try adding a reason with because.",
-  };
-  const question = {
-    starter: "What do you like?",
-    a1: "Why do you like it?",
-    a1plus: "Can you tell me one more thing about it?",
-  };
-  return `${starters[levelKey]} (${day.goal} 연습 중이에요.)\nYou said: "${text}"\n${question[levelKey]}`;
-}
-
-function extractEnglishForSpeech(text) {
-  return text
-    .split("\n")
-    .map((line) => line.replace(/\([^)]*\)/g, "").trim())
-    .filter((line) => /[a-z]/i.test(line))
-    .slice(0, 2)
-    .join(" ");
-}
-
-function saveAiSettings() {
-  state.aiProvider = $("#providerSelect").value;
-  state.aiKey = $("#apiKeyInput").value.trim();
-  saveState();
-  clearTtsCache();
-  renderVoiceOptions();
-  const hasCloudVoice = state.aiProvider !== "local" && state.aiKey;
-  pushChat(
-    "system",
-    state.aiProvider === "local"
-      ? "로컬 연습 모드로 설정했어요. API 키 없이 기본 회화 코치가 답합니다."
-      : `${state.aiProvider === "gemini" ? "Gemini" : "OpenAI"} 연결 설정을 저장했어요.${
-          hasCloudVoice ? " 이제 듣기 음성도 AI 목소리로 나와요. 🔊" : ""
-        }`
-  );
-}
-
-function suggestChatPrompt() {
-  // 아직 못 깬 미션이 있으면 그 표현을 힌트로, 다 깼으면 자유 질문을 추천
-  const missions = getTalkMissions();
-  const remaining = missions.filter((_, index) => !state.talkMissionDone.includes(index));
-
-  if (remaining.length) {
-    const mission = remaining[Math.floor(Math.random() * remaining.length)];
-    pushChat("system", `💡 힌트: "${mission.en}" (${mission.ko}) — 빈칸은 자유롭게 채워서 말해보세요!`);
-    $("#chatInput").value = mission.en.includes("_") ? mission.en.replace(/_+/g, "") : mission.en;
-  } else {
-    const prompts = suggestedPrompts[activeLevel()];
-    $("#chatInput").value = prompts[Math.floor(Math.random() * prompts.length)];
-  }
-  $("#chatInput").focus();
-}
-
-function startAiRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    pushChat("system", "이 브라우저에서는 말 입력이 제한될 수 있어요. 문장을 직접 입력해보세요.");
-    return;
-  }
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.start();
-  recognition.onresult = (event) => {
-    $("#chatInput").value = event.results[0][0].transcript;
-  };
-  recognition.onerror = () => {
-    pushChat("system", "마이크 권한을 확인하고 다시 시도해주세요.");
-  };
-}
-
-function getBestVoice() {
-  const voices = window.speechSynthesis?.getVoices?.() || [];
-  const english = voices.filter((voice) => /^en/i.test(voice.lang));
-
-  // 사용자가 직접 고른 목소리가 있으면 최우선
-  if (state.voiceName) {
-    const saved = english.find((voice) => voice.name === state.voiceName);
-    if (saved) return saved;
-  }
-
-  // 미국 여성/밝은 음성 우선. 같은 이름이면 Enhanced/Premium/Natural 변형 우선
-  const preferredNames = [
-    "Ava",
-    "Samantha",
-    "Allison",
-    "Susan",
-    "Joelle",
-    "Google US English",
-    "Aria",
-    "Jenny",
-    "Michelle",
-    "Zoe",
-    "Serena",
-  ];
-  for (const name of preferredNames) {
-    const matches = english.filter((voice) => voice.name.includes(name));
-    if (matches.length) {
-      return matches.find((voice) => /enhanced|premium|natural/i.test(voice.name)) || matches[0];
-    }
-  }
-
-  return (
-    english.find((voice) => /^en-US/i.test(voice.lang)) ||
-    english[0] ||
-    null
-  );
-}
-
-// macOS의 효과음/장난 음성은 학습용 목록에서 제외
-const NOVELTY_VOICES =
-  /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox/i;
-
-function listLearningVoices() {
-  return (window.speechSynthesis?.getVoices?.() || [])
-    .filter((voice) => /^en/i.test(voice.lang) && !NOVELTY_VOICES.test(voice.name))
-    .sort((a, b) => {
-      const rank = (voice) =>
-        (/Ava|Samantha|Allison|Susan|Joelle|Google US English|Aria|Jenny|Michelle|Zoe|Serena/i.test(voice.name)
-          ? 0
-          : 2) + (/^en-US/i.test(voice.lang) ? 0 : 1);
-      return rank(a) - rank(b) || a.name.localeCompare(b.name);
-    });
-}
-
-function renderVoiceOptions() {
-  const select = $("#voiceSelect");
-  if (!select) return;
-  const english = listLearningVoices();
-
-  select.innerHTML = "";
-  const auto = document.createElement("option");
-  auto.value = "";
-  const cloudReady =
-    Boolean(state.aiKey) && (state.aiProvider === "gemini" || state.aiProvider === "openai");
-  auto.textContent = cloudReady
-    ? `자동 (${state.aiProvider === "gemini" ? "Gemini" : "OpenAI"} AI 목소리)`
-    : "자동 추천 (미국 여성 우선)";
-  select.appendChild(auto);
-
-  english.forEach((voice) => {
-    const option = document.createElement("option");
-    option.value = voice.name;
-    option.textContent = `${voice.name} (${voice.lang})`;
-    select.appendChild(option);
-  });
-
-  select.value = english.some((voice) => voice.name === state.voiceName) ? state.voiceName : "";
-}
-
-function selectVoice() {
-  state.voiceName = $("#voiceSelect").value;
-  saveState();
-  speak("Hi! Nice to meet you. Let's speak English together!", 0.88);
-}
-
-// ---- AI(클라우드) TTS: API 키가 있으면 해당 AI의 음성으로 자동 전환 ----
-
-let speakSession = 0;
-let currentAudio = null;
-let cloudTtsBlockedUntil = 0;
-let geminiTtsModel = "";
-const ttsCache = new Map();
-
-const GEMINI_TTS_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
-
-function stopAllAudio() {
-  window.speechSynthesis?.cancel?.();
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
-}
-
-function cloudTtsEnabled() {
-  if (state.voiceName || Date.now() < cloudTtsBlockedUntil) return false;
-  if (GEMINI_PROXY) return true;
-  return Boolean(state.aiKey) && (state.aiProvider === "gemini" || state.aiProvider === "openai");
-}
-
-function defaultCloudVoice() {
-  return effectiveProvider() === "gemini" ? "Leda" : "marin";
-}
-
-function characterCloudVoice(character) {
-  return effectiveProvider() === "gemini" ? character.geminiVoice : character.openaiVoice;
-}
-
-function clearTtsCache() {
-  ttsCache.forEach((url) => URL.revokeObjectURL(url));
-  ttsCache.clear();
-  cloudTtsBlockedUntil = 0;
-  geminiTtsModel = "";
-}
-
-function pcmToWavBlob(base64, sampleRate) {
-  const binary = atob(base64);
-  const pcm = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) pcm[i] = binary.charCodeAt(i);
-
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  const writeText = (offset, text) => {
-    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
-  };
-  writeText(0, "RIFF");
-  view.setUint32(4, 36 + pcm.length, true);
-  writeText(8, "WAVE");
-  writeText(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeText(36, "data");
-  view.setUint32(40, pcm.length, true);
-  return new Blob([header, pcm], { type: "audio/wav" });
-}
-
-async function fetchGeminiTts(text, voice) {
-  const models = geminiTtsModel ? [geminiTtsModel] : GEMINI_TTS_MODELS;
-  let lastError = new Error("Gemini TTS 오류");
-  for (const model of models) {
-    const response = await fetch(
-      geminiUrl(model),
-      {
-        method: "POST",
-        headers: geminiHeaders(),
-        body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
-          },
-        }),
-      }
-    );
-    const data = await response.json();
-    if (!response.ok) {
-      lastError = new Error(data.error?.message || "Gemini TTS 오류");
-      continue;
-    }
-    const base64 = data.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData
-      ?.data;
-    if (!base64) {
-      lastError = new Error("Gemini TTS 응답에 오디오가 없어요");
-      continue;
-    }
-    geminiTtsModel = model;
-    // Gemini TTS는 24kHz 16bit mono PCM을 돌려준다
-    return URL.createObjectURL(pcmToWavBlob(base64, 24000));
-  }
-  throw lastError;
-}
-
-async function fetchOpenAiTts(text, voice) {
-  const response = await fetch("https://api.openai.com/v1/audio/speech", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${state.aiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini-tts",
-      voice,
-      input: text,
-      response_format: "mp3",
-    }),
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error?.message || "OpenAI TTS 오류");
-  }
-  return URL.createObjectURL(await response.blob());
-}
-
-async function fetchCloudAudio(text, voice) {
-  const provider = effectiveProvider();
-  const key = `${provider}:${voice}:${text}`;
-  if (ttsCache.has(key)) return ttsCache.get(key);
-
-  const url =
-    provider === "gemini" ? await fetchGeminiTts(text, voice) : await fetchOpenAiTts(text, voice);
-  ttsCache.set(key, url);
-  if (ttsCache.size > 24) {
-    const oldest = ttsCache.keys().next().value;
-    URL.revokeObjectURL(ttsCache.get(oldest));
-    ttsCache.delete(oldest);
-  }
-  return url;
-}
-
-function playUrl(url) {
-  return new Promise((resolve) => {
-    const audio = new Audio(url);
-    currentAudio = audio;
-    audio.onended = audio.onerror = () => {
-      if (currentAudio === audio) currentAudio = null;
-      resolve();
-    };
-    audio.play().catch(resolve);
-  });
-}
-
-async function speak(text, rate = 0.86, pitch = 1.04, cloudVoice = "") {
-  speakSession += 1;
-  await speakLine(text, rate, pitch, cloudVoice);
-}
-
-async function speakLine(text, rate, pitch, cloudVoice) {
-  stopAllAudio();
-  if (cloudTtsEnabled()) {
-    try {
-      const url = await fetchCloudAudio(text, cloudVoice || defaultCloudVoice());
-      await playUrl(url);
-      return;
-    } catch {
-      // 실패하면 1분간 클라우드 TTS를 쉬고 브라우저 음성으로 폴백
-      cloudTtsBlockedUntil = Date.now() + 60000;
-    }
-  }
-  await speakLocal(text, rate, pitch);
-}
-
-function speakLocal(text, rate, pitch) {
-  return new Promise((resolve) => {
-    if (!("speechSynthesis" in window)) {
-      $("#coachLine").textContent = "이 브라우저에서는 듣기 기능을 지원하지 않아요.";
-      resolve();
-      return;
-    }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.rate = rate;
-    utterance.pitch = pitch;
-    utterance.voice = getBestVoice();
-    utterance.onend = utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
-  });
-}
-
 let voiceRecorder = null;
 let voiceChunks = [];
 let voiceUrl = "";
@@ -1171,7 +481,7 @@ async function toggleVoiceRecording() {
 
 function playVoiceComparison() {
   if (!voiceUrl) return;
-  speakSession += 1;
+  bumpSpeakSession();
   stopAllAudio();
   $("#coachLine").textContent = "먼저 내 목소리, 그다음 원어민 발음이 나와요.";
   const target = dialogueTarget();
@@ -1183,13 +493,12 @@ function playVoiceComparison() {
 async function speakDialogue() {
   const { day, dialogue } = getLesson();
   const lines = day.boss ? ensureBossTargets() : dialogue.map((line) => line[1]);
-  speakSession += 1;
-  const session = speakSession;
+  const session = bumpSpeakSession();
 
   for (const line of lines) {
-    if (session !== speakSession) return;
+    if (session !== getSpeakSession()) return;
     await speakLine(line, 0.84, 1.04, "");
-    if (session !== speakSession) return;
+    if (session !== getSpeakSession()) return;
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
 }
@@ -1317,6 +626,7 @@ function resetApp() {
   storeRemove("lastAiReply");
   storeRemove("weakPhrases");
   storeRemove("bossCleared");
+  storeRemove("flowerType");
   state.level = "";
   state.progressDay = 1;
   state.viewDay = 1;
@@ -1334,6 +644,8 @@ function resetApp() {
   state.score = 0;
   state.chatMessages = [];
   state.lastAiReply = "";
+  // 새로 시작하면 다음 화분 진입 때 꽃을 다시 무작위 배정한다
+  state.flowerType = "";
   $("#testIntro").classList.remove("hidden");
   $("#quizPanel").classList.add("hidden");
   $("#resultPanel").classList.add("hidden");
@@ -1342,6 +654,7 @@ function resetApp() {
   renderPlan();
   renderRoadmap();
   renderChat();
+  renderGarden();
 }
 
 function completeToday() {
@@ -1364,9 +677,10 @@ function completeToday() {
   updateStatus();
   renderToday();
   renderPlan();
+  renderGarden();
   $("#coachLine").textContent = state.versionComplete
-    ? `${APP_VERSION.id} 28일을 완료했어요. v1 복습 후 ${APP_VERSION.next} 업데이트를 요청할 수 있어요.`
-    : `Day ${state.progressDay} 완료! 내일 앱을 열면 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
+    ? `${APP_VERSION.id} 28일을 완료했어요. 🌸 화분 탭에서 활짝 핀 꽃을 확인하고, ${APP_VERSION.next} 업데이트를 요청할 수 있어요.`
+    : `Day ${state.progressDay} 완료! 🌱 화분 탭에서 꽃이 자란 모습을 볼 수 있어요. 내일 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
 }
 
 // 넷플릭스 스타일 프로필 게이트: 앱을 열면 먼저 프로필을 고르고 본 화면으로 진입
@@ -1451,187 +765,6 @@ function addProfile() {
   location.reload();
 }
 
-// ---- 보호자 모드: 아이 화면(테스트·오늘·AI대화)과 보호자 화면 분리 ----
-// 보호자가 직접 만든 4자리 비밀번호로 잠근다. 5회 오답 시 60초 잠금,
-// 재설정은 두 자리 곱셈 검증을 거친다.
-
-const PIN_KEY = "kidEnglish.parentPinHash";
-const PIN_FAILS_KEY = "kidEnglish.pinFails";
-const PIN_LOCK_KEY = "kidEnglish.pinLockUntil";
-
-let gateMode = "enter"; // enter | setup | reset
-let resetAnswer = 0;
-
-function isParentMode() {
-  return sessionStorage.getItem("kidEnglish.parentMode") === "1";
-}
-
-function updateModeUI() {
-  document.body.classList.toggle("parent-mode", isParentMode());
-  $("#parentGatePanel").classList.toggle("hidden", isParentMode());
-  $("#parentContent").classList.toggle("hidden", !isParentMode());
-  $("#parentLockBtn").classList.toggle("hidden", !isParentMode());
-}
-
-function hasParentPin() {
-  return Boolean(localStorage.getItem(PIN_KEY));
-}
-
-async function hashPin(pin) {
-  if (!window.crypto?.subtle) return `plain:${pin}`;
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`kidEnglish:${pin}`)
-  );
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function openParentGate() {
-  gateMode = hasParentPin() ? "enter" : "setup";
-  renderParentGate("");
-}
-
-function renderParentGate(message) {
-  const titles = {
-    enter: "보호자 확인",
-    setup: "보호자 비밀번호 만들기",
-    reset: "비밀번호 재설정",
-  };
-  const descs = {
-    enter: "보호자 비밀번호 4자리를 입력해주세요.",
-    setup: "아이가 모르는 숫자 4자리로 정해주세요. 이 기기에만 저장됩니다.",
-    reset: "보호자 확인을 위해 곱셈 문제를 풀면 비밀번호를 새로 만들 수 있어요.",
-  };
-  $("#parentGateTitle").textContent = titles[gateMode];
-  $("#parentGateDesc").textContent = descs[gateMode];
-
-  const question = $("#parentQuestion");
-  if (gateMode === "reset") {
-    const a = 23 + Math.floor(Math.random() * 60);
-    const b = 13 + Math.floor(Math.random() * 60);
-    resetAnswer = a * b;
-    question.textContent = `${a} × ${b} = ?`;
-    question.classList.remove("hidden");
-  } else {
-    question.classList.add("hidden");
-  }
-
-  const input = $("#parentAnswerInput");
-  input.value = "";
-  input.type = gateMode === "reset" ? "tel" : "password";
-  input.placeholder = gateMode === "reset" ? "정답" : "비밀번호 4자리";
-  $("#parentPinConfirm").value = "";
-  $("#parentPinConfirm").classList.toggle("hidden", gateMode !== "setup");
-  $("#pinForgotBtn").classList.toggle("hidden", gateMode !== "enter");
-  $("#parentGateMsg").textContent = message || "";
-}
-
-function unlockParentMode() {
-  localStorage.setItem(PIN_FAILS_KEY, "0");
-  sessionStorage.setItem("kidEnglish.parentMode", "1");
-  updateModeUI();
-  renderParentDashboard();
-}
-
-async function submitParentGate(event) {
-  event.preventDefault();
-  const value = $("#parentAnswerInput").value.trim();
-
-  if (gateMode === "setup") {
-    if (!/^\d{4}$/.test(value)) {
-      renderParentGate("숫자 4자리로 입력해주세요.");
-      return;
-    }
-    if (value !== $("#parentPinConfirm").value.trim()) {
-      renderParentGate("두 입력이 서로 달라요. 다시 확인해주세요.");
-      return;
-    }
-    localStorage.setItem(PIN_KEY, await hashPin(value));
-    unlockParentMode();
-    return;
-  }
-
-  if (gateMode === "reset") {
-    if (Number(value) === resetAnswer) {
-      localStorage.removeItem(PIN_KEY);
-      gateMode = "setup";
-      renderParentGate("확인됐어요. 새 비밀번호를 만들어주세요.");
-    } else {
-      renderParentGate("정답이 아니에요. 새 문제로 다시 풀어주세요.");
-    }
-    return;
-  }
-
-  // enter 모드
-  const lockUntil = Number(localStorage.getItem(PIN_LOCK_KEY) || 0);
-  if (Date.now() < lockUntil) {
-    const seconds = Math.ceil((lockUntil - Date.now()) / 1000);
-    renderParentGate(`시도가 너무 많았어요. ${seconds}초 후에 다시 해주세요.`);
-    return;
-  }
-  if ((await hashPin(value)) === localStorage.getItem(PIN_KEY)) {
-    unlockParentMode();
-    return;
-  }
-  const fails = Number(localStorage.getItem(PIN_FAILS_KEY) || 0) + 1;
-  if (fails >= 5) {
-    localStorage.setItem(PIN_FAILS_KEY, "0");
-    localStorage.setItem(PIN_LOCK_KEY, String(Date.now() + 60000));
-    renderParentGate("5번 틀려서 60초 동안 잠겼어요.");
-  } else {
-    localStorage.setItem(PIN_FAILS_KEY, String(fails));
-    renderParentGate(`비밀번호가 달라요. (${fails}/5)`);
-  }
-}
-
-function startPinReset() {
-  gateMode = "reset";
-  renderParentGate("");
-}
-
-function lockParentMode() {
-  sessionStorage.removeItem("kidEnglish.parentMode");
-  updateModeUI();
-  switchTab("today");
-}
-
-function profileStoreGet(profileId, name) {
-  const key = profileId === "me" ? `kidEnglish.${name}` : `kidEnglish.${profileId}.${name}`;
-  return localStorage.getItem(key);
-}
-
-function renderParentDashboard() {
-  const wrap = $("#profileSummary");
-  wrap.innerHTML = "";
-  ensureProfiles().forEach((profile) => {
-    const levelKey = profileStoreGet(profile.id, "level") || "";
-    const day = Number(profileStoreGet(profile.id, "day") || 1);
-    const streak = Number(profileStoreGet(profile.id, "streak") || 0);
-    const done = profileStoreGet(profile.id, "versionComplete") === "true";
-    let weak = [];
-    try {
-      weak = JSON.parse(profileStoreGet(profile.id, "weakPhrases") || "[]");
-    } catch {
-      weak = [];
-    }
-
-    const row = document.createElement("div");
-    row.className = "summary-row";
-    const title = document.createElement("strong");
-    title.textContent = `${profile.emoji} ${profile.name}`;
-    const stats = document.createElement("span");
-    stats.textContent = [
-      levelKey ? `레벨 ${LEVELS[levelKey]?.label || levelKey}` : "테스트 전",
-      done ? `${APP_VERSION.id} 완료` : `Day ${day}`,
-      `연속 ${streak}일`,
-      weak.length ? `복습할 표현 ${weak.length}개` : "복습 카드 없음",
-    ].join(" · ");
-    row.appendChild(title);
-    row.appendChild(stats);
-    wrap.appendChild(row);
-  });
-}
-
 function bindEvents() {
   $$(".tab").forEach((tab) => tab.addEventListener("click", () => switchTab(tab.dataset.tab)));
   $("#profileSaveBtn").addEventListener("click", addProfile);
@@ -1688,12 +821,24 @@ function bindEvents() {
   });
 }
 
+// AI 답변에서 영어 부분만 골라 읽기용으로 다듬는다 (aiReadBtn 핸들러용)
+function extractEnglishForSpeech(text) {
+  return text
+    .split("\n")
+    .map((line) => line.replace(/\([^)]*\)/g, "").trim())
+    .filter((line) => /[a-z]/i.test(line))
+    .slice(0, 2)
+    .join(" ");
+}
+
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
 
 window.speechSynthesis?.addEventListener?.("voiceschanged", renderVoiceOptions);
 applyHybridProgress(state, APP_VERSION, saveState);
+initChat({ getLesson });
+initParent({ switchTab });
 bindEvents();
 if (GEMINI_PROXY) {
   // 서버 프록시 사용 시 키 입력이 필요 없으므로 안내로 대체
