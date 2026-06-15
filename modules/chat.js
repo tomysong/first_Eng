@@ -270,11 +270,11 @@ function makeLocalReply(text) {
 }
 
 function extractEnglishForSpeech(text) {
+  // 괄호 안 한국어 힌트는 빼고, 영어가 있는 줄은 마지막 질문까지 모두 읽는다
   return text
     .split("\n")
     .map((line) => line.replace(/\([^)]*\)/g, "").trim())
     .filter((line) => /[a-z]/i.test(line))
-    .slice(0, 2)
     .join(" ");
 }
 
