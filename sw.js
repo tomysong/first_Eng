@@ -1,4 +1,4 @@
-const CACHE_NAME = "kid-english-v3";
+const CACHE_NAME = "kid-english-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,12 @@ const ASSETS = [
   "./modules/dom.js",
   "./modules/profiles.js",
   "./modules/progress.js",
+  "./modules/store.js",
+  "./modules/api.js",
+  "./modules/tts.js",
+  "./modules/chat.js",
+  "./modules/parent.js",
+  "./modules/garden.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
