@@ -157,17 +157,29 @@ async function fetchOpenAiTts(text, presetKey) {
   return URL.createObjectURL(await response.blob());
 }
 
+// 같은 문장에 대한 동시 요청은 하나로 합친다(프리페치+클릭 중복 방지)
+const inflight = new Map();
+
 async function fetchCloudAudio(text, presetKey) {
   const key = `${presetKey}:${text}`;
   if (ttsCache.has(key)) return ttsCache.get(key);
-  const url = await fetchOpenAiTts(text, presetKey);
-  ttsCache.set(key, url);
-  if (ttsCache.size > 40) {
-    const oldest = ttsCache.keys().next().value;
-    URL.revokeObjectURL(ttsCache.get(oldest));
-    ttsCache.delete(oldest);
+  if (inflight.has(key)) return inflight.get(key);
+  const promise = (async () => {
+    const url = await fetchOpenAiTts(text, presetKey);
+    ttsCache.set(key, url);
+    if (ttsCache.size > 40) {
+      const oldest = ttsCache.keys().next().value;
+      URL.revokeObjectURL(ttsCache.get(oldest));
+      ttsCache.delete(oldest);
+    }
+    return url;
+  })();
+  inflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inflight.delete(key);
   }
-  return url;
 }
 
 // 같은 문장을 다시 들을 때 즉시 재생되도록 미리 받아 캐시에 넣어둔다.

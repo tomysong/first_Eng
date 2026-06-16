@@ -1,6 +1,6 @@
 import { state, saveState, activeLevel } from "./store.js";
 import { openaiChatUrl, cloudTtsReady } from "./api.js";
-import { speak, clearTtsCache, renderVoiceOptions } from "./tts.js";
+import { speak, clearTtsCache, renderVoiceOptions, prefetchCloudAudio } from "./tts.js";
 import { sttSupported, isRecording, startRecording, stopRecording, transcribe } from "./stt.js";
 import { chatCharacters, talkMissions, suggestedPrompts, LEVELS } from "./data.js";
 import { $, $$ } from "./dom.js";
@@ -175,6 +175,9 @@ export function renderChat() {
   $("#chatLog").innerHTML = "";
   state.chatMessages.forEach((message) => addChatBubble(message.role, message.text, message.character));
   $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
+  // 가장 최근 AI 메시지를 미리 받아둬 "듣기"를 누르면 바로 재생되게 한다
+  const lastAi = [...state.chatMessages].reverse().find((message) => message.role === "ai");
+  if (lastAi) prefetchCloudAudio(extractEnglishForSpeech(lastAi.text));
 }
 
 function migrateSavedGreeting() {

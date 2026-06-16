@@ -30,6 +30,7 @@ import {
   renderVoiceOptions,
   selectVoice,
   primeAudio,
+  prefetchCloudAudio,
   bumpSpeakSession,
   getSpeakSession,
 } from "./modules/tts.js";
@@ -298,6 +299,8 @@ function renderToday() {
         }
       });
       $("#dialogueList").appendChild(row);
+      // 화면에 보이는 동안 미리 음성을 받아둬 ▶를 누르면 바로 재생되게 한다
+      prefetchCloudAudio(line[1]);
     });
   }
 
