@@ -55,6 +55,39 @@ import {
 } from "./modules/parent.js";
 
 ensureProfiles();
+migrateDefaultProfileName();
+
+function learnerName() {
+  return currentProfile().name || "서율";
+}
+
+function migrateDefaultProfileName() {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
+    if (!Array.isArray(profiles) || !profiles.length) return;
+    let changed = false;
+    const nextProfiles = profiles.map((profile) => {
+      if (profile.id !== "me") return profile;
+      const next = { ...profile };
+      if (next.name === "나") {
+        next.name = "서율";
+        changed = true;
+      }
+      if (!next.englishName) {
+        next.englishName = "Seo-Yul";
+        changed = true;
+      }
+      if (!next.emoji) {
+        next.emoji = "🙂";
+        changed = true;
+      }
+      return next;
+    });
+    if (changed) localStorage.setItem(PROFILES_KEY, JSON.stringify(nextProfiles));
+  } catch {
+    // 프로필 저장값이 깨진 경우에는 기존 ensureProfiles 흐름에 맡긴다.
+  }
+}
 
 function buildCurriculum(levelKey) {
   const seeds = curriculumSeeds[levelKey];
@@ -225,18 +258,18 @@ function renderToday() {
   $("#lessonTitle").textContent = day.title;
   $("#lessonGoal").textContent = day.goal;
   $("#coachLine").textContent = state.level
-    ? `${LEVELS[levelKey].coach} 오늘 핵심 표현은 "${day.phrase}" 입니다.`
-    : "테스트를 먼저 하면 더 잘 맞는 미션을 추천할 수 있어요.";
+    ? `${learnerName()}, ${LEVELS[levelKey].coach} 오늘 핵심 표현은 "${day.phrase}" 입니다.`
+    : `${learnerName()}, 테스트를 먼저 하면 더 잘 맞는 미션을 추천할 수 있어요.`;
   if (day.boss) {
     const targets = ensureBossTargets();
     const passedCount = state.bossCleared.includes(day.day) ? targets.length : state.bossPassed.length;
     $("#coachLine").textContent =
       passedCount >= targets.length
         ? `Week ${day.week} 보스 미션 통과! 👑 다른 날 문장도 복습해보세요.`
-        : `보스 미션 ${passedCount}/${targets.length}: 아래 문장을 "말하기" 버튼으로 통과하세요.`;
+        : `${learnerName()}, 보스 미션 ${passedCount}/${targets.length}: 아래 문장을 "말하기" 버튼으로 통과하세요.`;
   }
   if (state.versionComplete) {
-    $("#coachLine").textContent = `${APP_VERSION.id}를 마쳤어요. 커리큘럼 탭에서 복습 후 ${APP_VERSION.next} 업데이트 요청을 확인하세요.`;
+    $("#coachLine").textContent = `${learnerName()}, ${APP_VERSION.id}를 마쳤어요. 커리큘럼 탭에서 복습 후 ${APP_VERSION.next} 업데이트 요청을 확인하세요.`;
   }
   $("#speechResult").textContent = "";
   $("#completeBtn").textContent =
@@ -544,8 +577,8 @@ async function startRecognition() {
       }
       $("#coachLine").textContent =
         score > 0.7
-          ? "좋아요. 핵심 단어가 잘 들렸어요."
-          : "괜찮아요. 회색 단어를 살려서 한 번 더! 이 문장은 표현 카드에 복습으로 담아둘게요.";
+          ? `${learnerName()}, 좋아요. 핵심 단어가 잘 들렸어요.`
+          : `${learnerName()}, 괜찮아요. 회색 단어를 살려서 한 번 더! 이 문장은 표현 카드에 복습으로 담아둘게요.`;
     } catch {
       $("#coachLine").textContent = "음성 변환에 실패했어요. 잠시 후 다시 눌러주세요.";
     }
@@ -691,8 +724,8 @@ function completeToday() {
   renderPlan();
   renderGarden();
   $("#coachLine").textContent = state.versionComplete
-    ? `${APP_VERSION.id} 28일을 완료했어요. 🌸 화분 탭에서 활짝 핀 꽃을 확인하고, ${APP_VERSION.next} 업데이트를 요청할 수 있어요.`
-    : `Day ${state.progressDay} 완료! 🌱 화분 탭에서 꽃이 자란 모습을 볼 수 있어요. 내일 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
+    ? `${learnerName()}, ${APP_VERSION.id} 28일을 완료했어요. 🌸 화분 탭에서 활짝 핀 꽃을 확인하고, ${APP_VERSION.next} 업데이트를 요청할 수 있어요.`
+    : `${learnerName()}, Day ${state.progressDay} 완료! 🌱 화분 탭에서 꽃이 자란 모습을 볼 수 있어요. 내일 다음 미션(Day ${state.progressDay + 1})으로 넘어가요.`;
 }
 
 // 넷플릭스 스타일 프로필 게이트: 앱을 열면 먼저 프로필을 고르고 본 화면으로 진입
@@ -770,7 +803,7 @@ function addProfile() {
   const profiles = ensureProfiles();
   const id = `p${Date.now().toString(36)}`;
   const emoji = PROFILE_EMOJIS[(profiles.length - 1) % PROFILE_EMOJIS.length];
-  profiles.push({ id, name, emoji });
+  profiles.push({ id, name, englishName: name, emoji });
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
   localStorage.setItem(ACTIVE_PROFILE_KEY, id);
   sessionStorage.setItem("kidEnglish.autoEnter", "1");

@@ -4,10 +4,19 @@ import { speak, clearTtsCache, renderVoiceOptions } from "./tts.js";
 import { sttSupported, isRecording, startRecording, stopRecording, transcribe } from "./stt.js";
 import { chatCharacters, talkMissions, suggestedPrompts, LEVELS } from "./data.js";
 import { $, $$ } from "./dom.js";
+import { currentProfile } from "./profiles.js";
 
 let _getLesson = () => ({ levelKey: "starter", day: {}, dialogue: [] });
 export function initChat({ getLesson }) {
   _getLesson = getLesson;
+}
+
+function learnerName() {
+  return currentProfile().name || "서율";
+}
+
+function learnerEnglishName() {
+  return currentProfile().englishName || currentProfile().name || "Seo-Yul";
 }
 
 export function activeCharacter() {
@@ -100,6 +109,7 @@ function getCoachPrompt() {
   return [
     "You are a friendly English conversation buddy for a Korean elementary school 5th grader.",
     activeCharacter().persona,
+    `The student's Korean profile name is ${learnerName()}. Their English name is ${learnerEnglishName()}. Use the student's name naturally sometimes.`,
     "Always stay in character and keep the chat going like a real friend.",
     `Student level: ${LEVELS[levelKey].label}. Today's topic: ${day.title}. Goal: ${day.goal}.`,
     missions ? `Gently guide the student to naturally use these target expressions: ${missions}.` : "",
@@ -139,7 +149,7 @@ function selectCharacter(key) {
   renderCharacterRow();
   const character = activeCharacter();
   pushChat("system", `이제 ${character.emoji} ${character.name}(${character.ko})와 대화해요!`);
-  pushChat("ai", `Hi! I am ${character.name} ${character.emoji}. Let's keep talking in English!`);
+  pushChat("ai", `Hi, ${learnerEnglishName()}! I am ${character.name} ${character.emoji}. Let's keep talking in English!`);
 }
 
 export function renderChat() {
@@ -155,9 +165,11 @@ export function renderChat() {
       {
         role: "ai",
         character: state.chatCharacter,
-        text: `Hi! I am ${character.name} ${character.emoji}. Let's talk about "${day.title}". Look at today's missions below and try to use them. What did you do today?`,
+        text: `Hi, ${learnerEnglishName()}! I am ${character.name} ${character.emoji}. Let's talk about "${day.title}". Look at today's missions below and try to use them. What did you do today?`,
       },
     ];
+  } else {
+    migrateSavedGreeting();
   }
 
   $("#chatLog").innerHTML = "";
@@ -165,12 +177,22 @@ export function renderChat() {
   $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
 }
 
+function migrateSavedGreeting() {
+  if (state.chatMessages.length !== 1) return;
+  const message = state.chatMessages[0];
+  if (message.role !== "ai" || !message.text.startsWith("Hi! I am ")) return;
+  const { day } = _getLesson();
+  const character = chatCharacters[message.character] || activeCharacter();
+  message.text = `Hi, ${learnerEnglishName()}! I am ${character.name} ${character.emoji}. Let's talk about "${day.title}". Look at today's missions below and try to use them. What did you do today?`;
+  saveState();
+}
+
 function addChatBubble(role, text, characterKey) {
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble ${role}`;
   const character = chatCharacters[characterKey] || activeCharacter();
   const label =
-    role === "user" ? "You" : role === "system" ? "Note" : `${character.emoji} ${character.name}`;
+    role === "user" ? learnerName() : role === "system" ? "Note" : `${character.emoji} ${character.name}`;
   bubble.innerHTML = `<strong>${label}</strong><p></p>`;
   bubble.querySelector("p").textContent = text;
   // AI 말풍선은 탭해서 그 문장을 바로 들을 수 있게 듣기 버튼을 단다
@@ -266,7 +288,7 @@ function makeLocalReply(text) {
     a1: "Why do you like it?",
     a1plus: "Can you tell me one more thing about it?",
   };
-  return `${starters[levelKey]} (${day.goal} 연습 중이에요.)\nYou said: "${text}"\n${question[levelKey]}`;
+  return `${learnerEnglishName()}, ${starters[levelKey]} (${day.goal} 연습 중이에요.)\nYou said: "${text}"\n${question[levelKey]}`;
 }
 
 function extractEnglishForSpeech(text) {
@@ -306,7 +328,7 @@ export function suggestChatPrompt() {
     $("#chatInput").value = mission.en.includes("_") ? mission.en.replace(/_+/g, "") : mission.en;
   } else {
     const prompts = suggestedPrompts[activeLevel()];
-    $("#chatInput").value = prompts[Math.floor(Math.random() * prompts.length)];
+    $("#chatInput").value = prompts[Math.floor(Math.random() * prompts.length)].replace("Seo-Yul", learnerEnglishName());
   }
   $("#chatInput").focus();
 }

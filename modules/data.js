@@ -92,7 +92,7 @@ export const quiz = [
 
 export const curriculumSeeds = {
   starter: [
-    ["Hello world", "인사하고 나를 소개하기", "Hi, I am Mina. I am eleven."],
+    ["Hello world", "인사하고 나를 소개하기", "Hi, I am Seo-Yul. I am eleven."],
     ["Feelings", "기분과 이유 말하기", "I am happy because it is Friday."],
     ["My favorites", "좋아하는 것과 이유 말하기", "I like games because they are fun."],
     ["School things", "물건 묻고 설명하기", "It is my notebook. It is blue."],
@@ -124,7 +124,7 @@ export const dialogues = {
   starter: [
     [
       ["Coach", "Hi there! What is your name?", "안녕! 이름이 뭐니?"],
-      ["You", "Hi, I am Minjun. Nice to meet you.", "안녕, 나는 민준이야. 만나서 반가워."],
+      ["You", "Hi, I am Seo-Yul. Nice to meet you.", "안녕, 나는 서율이야. 만나서 반가워."],
       ["Coach", "Nice to meet you too! How old are you?", "나도 반가워! 몇 살이니?"],
       ["You", "I am eleven years old.", "나는 열한 살이야."],
       ["Coach", "Cool! Let's be good friends.", "멋지다! 우리 좋은 친구가 되자."],
@@ -483,7 +483,7 @@ export const talkMissions = {
 
 export const suggestedPrompts = {
   starter: [
-    "Hi! I am Minjun.",
+    "Hi! I am Seo-Yul.",
     "I like music.",
     "How are you today?",
     "What is your favorite color?",
