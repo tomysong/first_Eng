@@ -152,6 +152,27 @@ export function lockParentMode() {
   _switchTab("today");
 }
 
+// Service Worker 등록·캐시를 모두 비우고 새로고침해 최신 버전을 받는다.
+// (프로필·진도 localStorage는 건드리지 않음)
+export async function clearAppCache() {
+  const msg = $("#cacheResetMsg");
+  if (msg) msg.textContent = "캐시를 비우는 중...";
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    if (msg) msg.textContent = "완료! 최신 버전으로 다시 불러옵니다...";
+    setTimeout(() => location.reload(), 600);
+  } catch {
+    if (msg) msg.textContent = "초기화에 실패했어요. 다시 시도해주세요.";
+  }
+}
+
 function profileStoreGet(profileId, name) {
   const key = profileId === "me" ? `kidEnglish.${name}` : `kidEnglish.${profileId}.${name}`;
   return localStorage.getItem(key);

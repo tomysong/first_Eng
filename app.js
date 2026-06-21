@@ -53,6 +53,7 @@ import {
   startPinReset,
   renderParentDashboard,
   updateModeUI,
+  clearAppCache,
 } from "./modules/parent.js";
 
 ensureProfiles();
@@ -846,6 +847,7 @@ function bindEvents() {
   $("#shuffleBtn").addEventListener("click", renderPhraseCards);
   $("#completeBtn").addEventListener("click", completeToday);
   $("#saveAiBtn").addEventListener("click", saveAiSettings);
+  $("#clearCacheBtn").addEventListener("click", clearAppCache);
   $("#clearChatBtn").addEventListener("click", () => {
     state.chatMessages = [];
     state.lastAiReply = "";
