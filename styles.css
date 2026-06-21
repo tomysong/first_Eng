@@ -332,6 +332,11 @@ h3 {
   display: none;
 }
 
+/* 프로필 선택 화면이 떠 있으면 하단 Notch 숨김 */
+body:has(#profileGate:not(.hidden)) .tab-bar {
+  display: none;
+}
+
 @keyframes notch-in {
   from { opacity: 0; transform: translate(-50%, 18px); }
   to { opacity: 1; transform: translate(-50%, 0); }
@@ -603,6 +608,7 @@ body:not(.parent-mode) .tab.parent-only {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+  margin-top: 28px;
   margin-bottom: 20px;
 }
 
