@@ -147,9 +147,18 @@ function updateCharacter() {
   mark.classList.toggle("streak-28", state.streak >= 28);
 }
 
+function positionTabIndicator() {
+  const indicator = $(".tab-indicator");
+  const active = $(".tab.active");
+  if (!indicator || !active) return;
+  indicator.style.width = `${active.offsetWidth}px`;
+  indicator.style.transform = `translateX(${active.offsetLeft}px)`;
+}
+
 function switchTab(tabId) {
   $$(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === tabId));
   $$(".screen").forEach((screen) => screen.classList.toggle("active", screen.id === tabId));
+  positionTabIndicator();
   if (tabId === "today") renderToday();
   if (tabId === "garden") renderGarden();
   if (tabId === "plan") renderPlan();
@@ -876,7 +885,6 @@ function extractEnglishForSpeech(text) {
     .split("\n")
     .map((line) => line.replace(/\([^)]*\)/g, "").trim())
     .filter((line) => /[a-z]/i.test(line))
-    .slice(0, 2)
     .join(" ");
 }
 
@@ -913,3 +921,8 @@ renderPlan();
 renderRoadmap();
 renderChat();
 renderGarden();
+
+// Notch 활성 표시 위치 초기화 + 화면 회전/리사이즈 시 재계산
+positionTabIndicator();
+requestAnimationFrame(positionTabIndicator);
+window.addEventListener("resize", positionTabIndicator);

@@ -97,7 +97,8 @@ a {
 .app-shell {
   width: min(100%, 960px);
   margin: 0 auto;
-  padding: max(20px, env(safe-area-inset-top)) 20px max(32px, env(safe-area-inset-bottom));
+  padding: max(20px, env(safe-area-inset-top)) 20px
+    calc(84px + max(14px, env(safe-area-inset-bottom)));
 }
 
 /* ---------- 히어로 ---------- */
@@ -306,29 +307,54 @@ h3 {
 
 /* ---------- 탭바 (플로팅 글래스 캡슐) ---------- */
 
+/* 하단 플로팅 Notch: 화면 하단에 떠 있는 글래스 알약 + 미끄러지는 활성 표시 */
 .tab-bar {
-  position: sticky;
-  top: 8px;
-  z-index: 10;
+  position: fixed;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
   display: flex;
-  gap: 4px;
-  margin: 16px 0;
-  padding: 4px;
-  overflow-x: auto;
-  background: rgba(249, 249, 249, 0.78);
-  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  gap: 2px;
+  padding: 5px;
+  width: min(calc(100% - 24px), 520px);
+  background: rgba(255, 255, 255, 0.72);
+  border: 0.5px solid rgba(255, 255, 255, 0.7);
   border-radius: var(--r-capsule);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(20px) saturate(1.8);
-  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  box-shadow: 0 10px 30px rgba(120, 70, 90, 0.18);
+  backdrop-filter: blur(22px) saturate(1.8);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
   scrollbar-width: none;
+  animation: notch-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tab-bar::-webkit-scrollbar {
   display: none;
 }
 
+@keyframes notch-in {
+  from { opacity: 0; transform: translate(-50%, 18px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* 활성 탭 뒤에서 미끄러지는 알약(JS가 위치·너비 설정) */
+.tab-indicator {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 0;
+  border-radius: var(--r-capsule);
+  background: var(--teal);
+  z-index: 0;
+  pointer-events: none;
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .tab {
+  position: relative;
+  z-index: 1;
   flex: 1 1 0;
   min-width: 0;
   min-height: 44px;
@@ -342,12 +368,16 @@ h3 {
   font-weight: 600;
   letter-spacing: -0.2px;
   white-space: nowrap;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .tab.active {
-  background: var(--teal);
   color: white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-bar { animation: none; }
+  .tab-indicator { transition: none; }
 }
 
 /* ---------- 프로필 게이트 (넷플릭스 스타일 선택 화면) ---------- */
