@@ -132,27 +132,27 @@
 
           <div class="dialogue" id="dialogueList"></div>
 
+          <div class="coach-box">
+            <span class="label">AI Coach</span>
+            <strong id="coachLine">테스트 후 오늘 미션을 추천할게요.</strong>
+            <p id="speechResult"></p>
+          </div>
+
           <div class="controls-grid">
-            <button id="listenBtn" class="primary-btn" type="button">듣기</button>
-            <button id="repeatBtn" class="secondary-btn" type="button">한 문장씩</button>
-            <button id="recordBtn" class="secondary-btn" type="button">말하기</button>
+            <button id="listenBtn" class="primary-btn" type="button">1. 듣기</button>
+            <button id="repeatBtn" class="secondary-btn" type="button">2. 한 문장씩</button>
+            <button id="recordBtn" class="secondary-btn" type="button">3. 말하기</button>
           </div>
 
           <div class="voice-row">
-            <button id="voiceRecordBtn" class="secondary-btn" type="button" aria-label="내 목소리 녹음">🎙 내 목소리 녹음</button>
-            <button id="voiceCompareBtn" class="secondary-btn" type="button" aria-label="내 발음과 원어민 비교" disabled>내 발음 ↔ 원어민 비교</button>
+            <button id="voiceRecordBtn" class="secondary-btn" type="button" aria-label="내 목소리 녹음">4. 🎙 내 목소리 녹음</button>
+            <button id="voiceCompareBtn" class="secondary-btn" type="button" aria-label="내 발음과 원어민 비교" disabled>5. 내 발음 ↔ 원어민 비교</button>
           </div>
 
           <label class="voice-pick">
             <span class="label">원어민 목소리</span>
             <select id="voiceSelect"></select>
           </label>
-
-          <div class="coach-box">
-            <span class="label">AI Coach</span>
-            <strong id="coachLine">테스트 후 오늘 미션을 추천할게요.</strong>
-            <p id="speechResult"></p>
-          </div>
 
           <button id="completeBtn" class="primary-btn complete-btn" type="button">오늘 완료</button>
         </article>
