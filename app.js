@@ -106,7 +106,8 @@ function buildCurriculum(levelKey) {
         boss: true,
       };
     }
-    const seed = seeds[index % seeds.length];
+    const nonBossIndex = index - Math.floor(index / 7);
+    const seed = seeds[nonBossIndex % seeds.length];
     return {
       day: dayNum,
       week,
