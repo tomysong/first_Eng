@@ -162,9 +162,11 @@ function switchTab(tabId) {
   positionTabIndicator();
   if (tabId === "today") renderToday();
   if (tabId === "garden") renderGarden();
-  if (tabId === "plan") renderPlan();
   if (tabId === "chat") renderChat();
-  if (tabId === "roadmap") renderRoadmap();
+  if (tabId === "roadmap") {
+    renderPlan();
+    renderRoadmap();
+  }
   if (tabId === "parent") {
     if (isParentMode()) renderParentDashboard();
     else openParentGate();
@@ -927,4 +929,7 @@ renderGarden();
 // Notch 활성 표시 위치 초기화 + 화면 회전/리사이즈 시 재계산
 positionTabIndicator();
 requestAnimationFrame(positionTabIndicator);
+// 한글 폰트가 늦게 로드되면 첫 측정 후 글자 너비가 변해 인디케이터가 어긋난다 — 폰트 로딩 후 재계산
+if (document.fonts?.ready) document.fonts.ready.then(positionTabIndicator);
+window.addEventListener("load", positionTabIndicator);
 window.addEventListener("resize", positionTabIndicator);
