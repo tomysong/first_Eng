@@ -563,7 +563,9 @@ export const chatCharacters = {
     rate: 0.9,
     pitch: 1.22,
     geminiVoice: "Zephyr",
-    openaiVoice: "coral",
+    openaiVoice: "shimmer",
+    voiceInstructions:
+      "Speak as a cheerful, bouncy young girl bunny character for a Korean child learning English. Bright and playful tone, high energy, smiley voice, slightly higher pitch than normal, friendly and warm. Pace: clear and a bit slow.",
   },
   max: {
     name: "Max",
@@ -575,6 +577,8 @@ export const chatCharacters = {
     pitch: 0.92,
     geminiVoice: "Charon",
     openaiVoice: "onyx",
+    voiceInstructions:
+      "Speak as a friendly robot tutor for a Korean child learning English. Slightly monotone, steady, mechanical cadence with even rhythm and crisp consonants. Calm low-medium pitch, no emotional swings, robotic but warm. Pace: slow and very clear.",
   },
   coco: {
     name: "Coco",
@@ -586,6 +590,8 @@ export const chatCharacters = {
     pitch: 1.1,
     geminiVoice: "Aoede",
     openaiVoice: "nova",
+    voiceInstructions:
+      "Speak as a curious young girl cat character for a Korean child learning English. Light, inquisitive tone with playful upward inflections at question ends. Soft and warm, gentle volume, a hint of giggle. Pace: clear and a bit slow.",
   },
 };
 

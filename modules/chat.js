@@ -1,6 +1,6 @@
 import { state, saveState, activeLevel } from "./store.js";
 import { openaiChatUrl, cloudTtsReady } from "./api.js";
-import { speak, clearTtsCache, renderVoiceOptions, prefetchCloudAudio } from "./tts.js";
+import { speak, clearTtsCache, renderVoiceOptions, prefetchCloudAudio, characterVoiceOverride } from "./tts.js";
 import { sttSupported, isRecording, startRecording, stopRecording, transcribe } from "./stt.js";
 import { chatCharacters, talkMissions, suggestedPrompts, LEVELS } from "./data.js";
 import { $, $$ } from "./dom.js";
@@ -177,7 +177,10 @@ export function renderChat() {
   $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
   // 가장 최근 AI 메시지를 미리 받아둬 "듣기"를 누르면 바로 재생되게 한다
   const lastAi = [...state.chatMessages].reverse().find((message) => message.role === "ai");
-  if (lastAi) prefetchCloudAudio(extractEnglishForSpeech(lastAi.text));
+  if (lastAi) {
+    const character = chatCharacters[lastAi.character] || activeCharacter();
+    prefetchCloudAudio(extractEnglishForSpeech(lastAi.text), characterVoiceOverride(character));
+  }
 }
 
 function migrateSavedGreeting() {
@@ -205,7 +208,9 @@ function addChatBubble(role, text, characterKey) {
     playBtn.className = "bubble-play";
     playBtn.textContent = "🔊 듣기";
     playBtn.setAttribute("aria-label", "이 문장 듣기");
-    playBtn.addEventListener("click", () => speak(extractEnglishForSpeech(text)));
+    playBtn.addEventListener("click", () =>
+      speak(extractEnglishForSpeech(text), character.rate, character.pitch, characterVoiceOverride(character))
+    );
     bubble.appendChild(playBtn);
   }
   $("#chatLog").appendChild(bubble);
@@ -234,7 +239,8 @@ export async function sendAiMessage(text) {
   try {
     const reply = await callOpenAiChat(cleanText);
     pushChat("ai", reply);
-    speak(extractEnglishForSpeech(reply));
+    const character = activeCharacter();
+    speak(extractEnglishForSpeech(reply), character.rate, character.pitch, characterVoiceOverride(character));
   } catch (error) {
     pushChat(
       "system",

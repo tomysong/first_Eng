@@ -31,6 +31,7 @@ import {
   selectVoice,
   primeAudio,
   prefetchCloudAudio,
+  characterVoiceOverride,
   bumpSpeakSession,
   getSpeakSession,
 } from "./modules/tts.js";
@@ -863,7 +864,13 @@ function bindEvents() {
   $("#aiPromptBtn").addEventListener("click", suggestChatPrompt);
   $("#aiMicBtn").addEventListener("click", startAiRecognition);
   $("#aiReadBtn").addEventListener("click", () => {
-    speak(extractEnglishForSpeech(state.lastAiReply));
+    const character = activeCharacter();
+    speak(
+      extractEnglishForSpeech(state.lastAiReply),
+      character.rate,
+      character.pitch,
+      characterVoiceOverride(character)
+    );
   });
   $("#voiceRecordBtn").addEventListener("click", toggleVoiceRecording);
   $("#voiceCompareBtn").addEventListener("click", playVoiceComparison);

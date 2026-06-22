@@ -140,17 +140,26 @@ export function clearTtsCache() {
   cloudTtsBlockedUntil = 0;
 }
 
-async function fetchOpenAiTts(text, presetKey) {
-  const preset = VOICE_PRESETS[presetKey] || VOICE_PRESETS[DEFAULT_PRESET];
+// override = { voice, instructions } 가 있으면 그걸 사용 (캐릭터 음성용)
+function resolveVoiceSpec(override) {
+  if (override && override.voice) {
+    return { voice: override.voice, instructions: override.instructions || "" };
+  }
+  const preset = VOICE_PRESETS[currentPreset()] || VOICE_PRESETS[DEFAULT_PRESET];
+  return { voice: preset.voice, instructions: preset.instructions };
+}
+
+async function fetchOpenAiTts(text, override) {
+  const spec = resolveVoiceSpec(override);
   const response = await fetch(openaiTtsUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-4o-mini-tts",
-      voice: preset.voice,
+      voice: spec.voice,
       input: text,
       response_format: "mp3",
-      instructions: preset.instructions,
+      instructions: spec.instructions,
     }),
   });
   if (!response.ok) throw new Error("OpenAI TTS 오류");
@@ -160,12 +169,17 @@ async function fetchOpenAiTts(text, presetKey) {
 // 같은 문장에 대한 동시 요청은 하나로 합친다(프리페치+클릭 중복 방지)
 const inflight = new Map();
 
-async function fetchCloudAudio(text, presetKey) {
-  const key = `${presetKey}:${text}`;
+function cacheKey(text, override) {
+  const spec = resolveVoiceSpec(override);
+  return `${spec.voice}:${text}`;
+}
+
+async function fetchCloudAudio(text, override) {
+  const key = cacheKey(text, override);
   if (ttsCache.has(key)) return ttsCache.get(key);
   if (inflight.has(key)) return inflight.get(key);
   const promise = (async () => {
-    const url = await fetchOpenAiTts(text, presetKey);
+    const url = await fetchOpenAiTts(text, override);
     ttsCache.set(key, url);
     if (ttsCache.size > 40) {
       const oldest = ttsCache.keys().next().value;
@@ -183,9 +197,18 @@ async function fetchCloudAudio(text, presetKey) {
 }
 
 // 같은 문장을 다시 들을 때 즉시 재생되도록 미리 받아 캐시에 넣어둔다.
-export function prefetchCloudAudio(text) {
+export function prefetchCloudAudio(text, override) {
   if (!cloudTtsEnabled() || !text) return;
-  fetchCloudAudio(text, currentPreset()).catch(() => {});
+  fetchCloudAudio(text, override).catch(() => {});
+}
+
+// 캐릭터(chatCharacters 항목) → speak/prefetch에 넘길 override 객체
+export function characterVoiceOverride(character) {
+  if (!character) return undefined;
+  return {
+    voice: character.openaiVoice,
+    instructions: character.voiceInstructions || "",
+  };
 }
 
 function playUrl(url) {
@@ -202,16 +225,17 @@ function playUrl(url) {
   });
 }
 
-export async function speak(text, rate = 0.92, pitch = 1.02) {
+// override = { voice, instructions, rate, pitch } 형태. 캐릭터 음성에 사용.
+export async function speak(text, rate = 0.92, pitch = 1.02, override) {
   speakSession += 1;
-  await speakLine(text, rate, pitch);
+  await speakLine(text, rate, pitch, override);
 }
 
-export async function speakLine(text, rate, pitch) {
+export async function speakLine(text, rate, pitch, override) {
   stopAllAudio();
   if (cloudTtsEnabled()) {
     try {
-      const url = await fetchCloudAudio(text, currentPreset());
+      const url = await fetchCloudAudio(text, override);
       await playUrl(url);
       return;
     } catch {
